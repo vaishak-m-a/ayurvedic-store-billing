@@ -526,7 +526,7 @@ def dashboard():
         FROM sale_items si
         JOIN sales s ON s.id = si.sale_id
         WHERE s.date = ? AND si.quantity > 0
-        GROUP BY si.name
+        GROUP BY si.name, si.unit
         ORDER BY qty_sold DESC
         LIMIT 3
     """, (today,)).fetchall()
