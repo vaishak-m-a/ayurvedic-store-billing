@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* Extra clean look for print */
+        @media print {
+            body * { visibility: hidden; }
+            #printable-bill, #printable-bill * { visibility: visible; }
+            #printable-bill { 
+                position: absolute; 
+                left: 0; 
+                top: 0; 
+                width: 100%; 
+                font-size: 12px;
+            }
+            .no-print { display: none; }
+            /* HIDE THE REMOVE BUTTON ON PRINT */
+            .remove-btn { display: none !important; }
+            .bill-header { text-align: center; }
+            .bill-header h3 { margin-bottom: 5px; }
+
+            .bill-customer-details {
+                text-align: left;
+                margin-bottom: 1rem;
+                padding-bottom: 1rem;
+                border-bottom: 1px dashed #000;
+            }
+            .bill-customer-details p {
+                margin: 0;
+            }
+            /* Force table cells to use consistent padding on print */
+            #printable-bill table th, #printable-bill table td {
+                padding: 5px;
+                border-color: #000;
+            }
+            #printable-bill .subtotal-span, #printable-bill #bill-total {
+                font-weight: bold;
+            }
+            /* Hide the action column header on print */
+            #bill-table thead tr th:last-child {
+                display: none;
+            }
+        }
+
+        /* Search dropdown styles */
+        .search-container {
+            position: relative;
+        }
+
+        .search-results {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            border: 1px solid #ccc;
+            border-top: none;
+            background: #fff;
+            max-height: 200px;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: none; /* Initially hidden */
+            /* Pin the dropdown right under the search input */
+            position: absolute;
+            top: 100%; 
+            left: 0;
+        }
+
+        .search-cell {
+            position: relative; /* Context for absolute positioning of search results */
+            padding: 0 !important; /* Remove padding for input to fill cell */
+        }
+        
+        .search-results div {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+
+        .search-results div:hover {
+            background: #f0f0f0;
+        }
+        
+        .bill-table-body td input {
+            width: 80px;
+        }
+
+        .customer-details-section {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+        }
+        .customer-details-section .form-group {
+            margin-bottom: 0;
+        }
+
+        /* New styles for buttons and payment options */
+        .billing-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-top: 2rem;
+        }
+
+        .payment-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .payment-option-box {
+            padding: 0.75rem 1rem;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        .payment-option-box input {
+            margin-right: 0.5rem;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            flex-grow: 1;
+        }
+
+        .button-group .btn {
+            flex: 1;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="app-container">
+        <header class="main-header">
+            <h1 class="logo">Billing App</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('billing') }}" class="nav-link active">Billing</a>
+                <a href="{{ url_for('sales_report') }}" class="nav-link">Sales Report</a>
+                <a href="{{ url_for('add_stock') }}" class="nav-link">Add/Update Stock</a>
+                <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
+                <a href="{{ url_for('out_of_stock') }}" class="nav-link">Order Stock</a>
+                <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
+            </nav>
+        </header>
+
+        <div class="main-content billing-content">
+            <h2 class="page-title">Generate Bill</h2>
+
+            <div class="card p-4 mb-4 no-print">
+                <h3>Customer & Doctor Details</h3>
+                <div class="customer-details-section">
+                    <div class="form-group">
+                        <label for="customer-name">Customer Name (Optional)</label>
+                        <input class="form-control" id="customer-name" placeholder="Customer Name">
+                    </div>
+                    <div class="form-group">
+                        <label for="doctor-name">Doctor's Name (Optional)</label>
+                        <input class="form-control" id="doctor-name" placeholder="Doctor's Name">
+                    </div>
+                    <div class="form-group">
+                        <label for="customer-phone">Phone Number (Optional)</label>
+                        <input class="form-control" id="customer-phone" placeholder="Phone Number">
+                    </div>
+                    <div class="form-group">
+                        <label for="customer-address">Address (Optional)</label>
+                        <input class="form-control" id="customer-address" placeholder="Address">
+                    </div>
+                </div>
+            </div>
+
+            <div class="bill-section card p-4" id="printable-bill">
+                <div class="bill-header">
+                    <h3>Authorised Dealer - Arya Vaidya Sala Kottakkal Shoranur Road, Kulappully)</h3>
+                    <p>PH: 9539837254</span> No: <span id="bill-no">N/A</span> | Date: <span id="bill-date"></span></p>
+                </div>
+                
+                <div class="bill-customer-details">
+                    <p><strong>Customer:</strong> <span id="bill-customer-name"></span></p>
+                    <p><strong>Doctor:</strong> <span id="bill-doctor-name"></span></p>
+                    <p><strong>Phone:</strong> <span id="bill-customer-phone"></span></p>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-striped" id="bill-table">
+                        <thead>
+                            <tr>
+                                <th>S.No</th>
+                                <th>Name</th>
+                                <th>Unit</th>
+                                <th>Price</th>
+                                <th>Qty</th>
+                                <th>Subtotal</th>
+                                <th class="no-print">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bill-table-body">
+                            <tr id="search-row" class="no-print">
+                                <td colspan="7" class="search-cell">
+                                    <input id="medicineSearch" class="form-control" placeholder="Search medicine by name or code and press Enter to add..." autofocus>
+                                    <div id="search-results" class="search-results"></div>
+                                </td>
+                            </tr>
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="5" class="text-right">Subtotal</td>
+                                <td>₹<span id="subtotal">0.00</span></td>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td colspan="5" class="text-right">Discount (%)</td>
+                                <td class="no-print"><input type="number" id="discount" class="form-control" value="0"></td>
+                                <td class="no-print"></td>
+                            </tr>
+                            <tr class="grand-total-row">
+                                <td colspan="5" class="text-right font-weight-bold">Grand Total</td>
+                                <td class="font-weight-bold">₹<span id="bill-total">0.00</span></td>
+                                <td class="no-print"></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <div class="no-print billing-controls">
+                <div class="payment-options">
+                    <label class="payment-option-box">
+                        <input type="radio" name="payment-method" value="Cash" checked> Cash
+                    </label>
+                    <label class="payment-option-box">
+                        <input type="radio" name="payment-method" value="GPay"> GPay
+                    </label>
+                </div>
+                <div class="button-group">
+                    <button id="generate-bill-btn" class="btn btn-success">Save Bill</button>
+                    <button id="print-bill-btn" class="btn btn-primary">Print Bill</button>
+                </div>
+                <button id="reset-bill-btn" class="btn btn-danger">Reset</button>
+                <div id="status-message" class="status-message mt-3"></div>
+            </div>
+        </div>
+
+        <footer class="main-footer no-print">
+            <p>&copy; 2025 Billing Software</p>
+        </footer>
+    </div>
+
+    <script>
+        // Define a global variable for the dashboard URL
+        const DASHBOARD_URL = "{{ url_for('dashboard') }}"; 
+    </script>
+    <script src="{{ url_for('static', filename='js/billing.js') }}"></script>
+    <script>
+        // Note: The makeLineId function is defined in billing.js and is needed here.
+        function makeLineId() {
+            return (crypto.randomUUID && crypto.randomUUID()) || (Date.now() + '-' + Math.random().toString(36).slice(2));
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById("bill-date").innerText = new Date().toLocaleDateString();
+            const randomBillNo = Math.floor(Math.random() * 9000) + 1000;
+            document.getElementById("bill-no").innerText = randomBillNo;
+            const editBillItems = {{ (edit_bill_items | tojson | safe) if edit_bill_items is defined else '[]' }};
+
+            if (editBillItems && editBillItems.length > 0) {
+                editBillItems.forEach(item => {
+                    const lineId = makeLineId();
+                    billItems[lineId] = {
+                        lineId,
+                        id: item.medicine_id,
+                        name: item.name,
+                        unit: item.unit,
+                        mrp: item.unit_price, // Use unit_price as the starting MRP
+                        loose_unit: item.loose_unit,
+                        loose_mrp: item.loose_mrp, // Use loose_mrp as the starting Loose MRP (if applicable)
+                        unitType: item.unit_type,
+                        quantity: item.quantity,
+                        subtotal: item.line_total
+                    };
+                    // Ensure the correct price field is updated based on unit_type from the DB
+                    if(item.unit_type === 'loose') {
+                        billItems[lineId].loose_mrp = item.unit_price;
+                    } else {
+                         billItems[lineId].mrp = item.unit_price;
+                    }
+                });
+                updateBillTable();
+                alert('Bill loaded for editing. You can now modify and save it.');
+            }
+            
+            // Initial call to ensure the search input is focused right away
+            const searchInput = document.getElementById('medicineSearch');
+            if (searchInput) {
+                searchInput.focus();
+            }
+            
+            // Add listeners to save customer/doctor details on input changes (for persistence, handled in billing.js)
+            document.getElementById('customer-name').addEventListener('input', saveBillToSession);
+            document.getElementById('doctor-name').addEventListener('input', saveBillToSession);
+            document.getElementById('customer-phone').addEventListener('input', saveBillToSession);
+            document.getElementById('customer-address').addEventListener('input', saveBillToSession);
+        });
+    </script>
+</body>
+</html>

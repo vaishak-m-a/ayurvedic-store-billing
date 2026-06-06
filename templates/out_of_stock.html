@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Out of Stock / Order</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* General page layout */
+        .stock-list-container { margin-top: 1.5rem; }
+        .category-group { margin-bottom: 2rem; }
+        .category-group h3 { 
+            background-color: var(--dark-color);
+            color: var(--light-color);
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+        }
+
+        /* Table styles specific to this page */
+        .stock-table th { white-space: nowrap; }
+        .stock-table td:nth-child(2) { font-weight: 500; } /* Highlight Name column */
+        
+        /* Order Input Styles */
+        .order-qty-input { width: 70px; text-align: center; }
+        
+        /* Search Input Style */
+        #stockFilterInput {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+
+        /* Order List container is now purely for temporary output */
+        #orderIntendOutput {
+            display: none; 
+        }
+
+        /* --- CRITICAL PRINT FIXES (Final version) --- */
+        @media print {
+            /* 1. Reset core layout elements to avoid excessive pages/margins */
+            html, body, .app-container, .main-content {
+                height: auto !important;
+                overflow: visible !important;
+                margin: 0 !important; 
+                padding: 0 !important;
+                width: 100% !important;
+            }
+
+            /* 2. Hide everything *initially* */
+            body > *:not(.print-only-container) { /* Hide everything except the print container */
+                visibility: hidden !important; 
+                display: none !important;
+            }
+            
+            /* 3. Make the output visible and position it correctly */
+            .print-only-container { /* Target the new container class */
+                visibility: visible !important; 
+                display: block !important;
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 20px; 
+                font-size: 11pt;
+                box-shadow: none;
+                
+                /* Ensure text aligns correctly in monospace */
+                font-family: 'Courier New', Courier, monospace !important;
+                white-space: pre !important; 
+                line-height: 1.2; /* Better spacing for dense printout */
+            }
+            
+            /* Ensure all nested elements inside the output are visible and reset their margins */
+            .print-only-container * { 
+                visibility: visible !important; 
+                box-shadow: none !important;
+            }
+            .print-only-container pre {
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <h1 class="logo">Billing App</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('billing') }}" class="nav-link">Billing</a>
+                <a href="{{ url_for('sales_report') }}" class="nav-link">Sales Report</a>
+                <a href="{{ url_for('add_stock') }}" class="nav-link">Stock Management</a>
+                <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
+                <a href="{{ url_for('out_of_stock') }}" class="nav-link active">Order Stock</a>
+                <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <h2 class="page-title">Out of Stock & Order Intend</h2>
+            
+            <div class="card p-4">
+                <div id="statusMessage" class="warning-banner" style="display: none;"></div>
+                
+                <input type="text" id="stockFilterInput" placeholder="Filter medicines by Name or Code..." onkeyup="filterStock()">
+
+                <div class="stock-list-container">
+                    {% if categorized_stock %}
+                        <p class="text-muted">Below are items with stock **less than 7 packs** and need reordering. Enter the quantity you wish to order (in packs).</p>
+                        <form id="orderForm">
+                            {% for category, items in categorized_stock.items() %}
+                                <div class="category-group" data-category="{{ category }}">
+                                    <h3>{{ category if category else 'Uncategorized' }}</h3>
+                                    <div class="table-responsive">
+                                        <table class="table table-striped stock-table" data-category-table>
+                                            <thead>
+                                                <tr>
+                                                    <th style="width: 10%;">Code</th>
+                                                    <th style="width: 40%;">Name</th>
+                                                    <th style="width: 15%;">Pack Size</th>
+                                                    <th style="width: 15%;">Current Stock</th>
+                                                    <th style="width: 20%;">Order Qty (Packs)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for item in items %}
+                                                    <tr data-name="{{ item.name }}" data-code="{{ item.code }}" data-pack-size="{{ item.pack_size_ml }}">
+                                                        <td>{{ item.code or '-' }}</td>
+                                                        <td>{{ item.name }}</td>
+                                                        <td>{{ item.unit or 'N/A' }} ({{ '%.2f'|format(item.pack_size_ml or 0) }} ml/g)</td>
+                                                        <td>{{ '%.2f'|format(item.stock or 0) }} ml/g</td>
+                                                        <td>
+                                                            <input type="number" 
+                                                                   class="form-control order-qty-input" 
+                                                                   name="item_{{ item.id }}" 
+                                                                   min="0" value="0">
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            <button type="button" id="generateOrderBtn" class="btn btn-primary mt-3">Generate Order Intend List</button>
+                        </form>
+                    {% else %}
+                        <p class="mt-3">No low-stock items requiring immediate attention.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div id="orderIntendOutput"></div>
+
+        </div>
+
+        <footer class="main-footer">
+            <p>&copy; 2025 Billing Software</p>
+        </footer>
+    </div>
+    
+    <script>
+        document.getElementById('generateOrderBtn').addEventListener('click', generateOrderList);
+
+        // --- FILTER FUNCTION ---
+        function filterStock() {
+            const input = document.getElementById('stockFilterInput');
+            const filter = input.value.toUpperCase();
+            const categoryGroups = document.querySelectorAll('.category-group');
+            let visibleCategories = 0;
+
+            categoryGroups.forEach(group => {
+                const rows = group.querySelectorAll('tbody tr');
+                let matchesInGroup = 0;
+                
+                rows.forEach(row => {
+                    const nameCell = row.cells[1].textContent.toUpperCase();
+                    const codeCell = row.cells[0].textContent.toUpperCase();
+                    
+                    if (nameCell.includes(filter) || codeCell.includes(filter)) {
+                        row.style.display = "";
+                        matchesInGroup++;
+                    } else {
+                        row.style.display = "none";
+                    }
+                });
+
+                // Show or hide the entire category group based on visible rows
+                if (matchesInGroup > 0) {
+                    group.style.display = "";
+                    visibleCategories++;
+                } else {
+                    group.style.display = "none";
+                }
+            });
+
+            // Optional: Show status if no results found globally
+            const statusDiv = document.getElementById('statusMessage');
+            if (filter.length > 0 && visibleCategories === 0) {
+                statusDiv.textContent = 'No matching medicines found.';
+                statusDiv.style.display = 'block';
+                statusDiv.style.color = 'orange';
+            } else {
+                statusDiv.style.display = 'none';
+            }
+        }
+        // -----------------------
+
+        // --- UPDATED GENERATE ORDER FUNCTION ---
+        let printContainer = null;
+        
+        function generateOrderList() {
+            const form = document.getElementById('orderForm');
+            const statusDiv = document.getElementById('statusMessage');
+            const orderList = [];
+
+            // 1. Compile the list of items to order
+            form.querySelectorAll('tbody tr').forEach(row => {
+                if (row.style.display === 'none') return;
+                
+                const input = row.querySelector('.order-qty-input');
+                const qty = parseInt(input.value);
+                
+                if (qty > 0) {
+                    const name = row.dataset.name;
+                    const code = row.cells[0].textContent.trim();
+                    const packSize = row.dataset.packSize;
+                    const unitText = row.cells[2].textContent;
+                    const unit = unitText.substring(0, unitText.indexOf('(')).trim();
+
+                    orderList.push({ name, code, qty, unit, packSize });
+                }
+            });
+
+            if (orderList.length === 0) {
+                statusDiv.textContent = 'Please enter a quantity greater than zero for at least one visible item.';
+                statusDiv.style.display = 'block';
+                statusDiv.style.color = 'red';
+                setTimeout(() => statusDiv.style.display = 'none', 5000);
+                return;
+            }
+
+            statusDiv.style.display = 'none';
+
+            // 2. Format the printable output string
+            let outputText = "========================================================\n";
+            outputText += `  ARYA VAIDYA SALA KOTTAKKAL - ORDER INTEND LIST\n`;
+            outputText += `  Date Generated: ${new Date().toLocaleDateString()}\n`;
+            outputText += "========================================================\n\n";
+            
+            outputText += "  S.No | Code        | Item Name                 | Qty (Packs) | Pack Info\n";
+            outputText += "----------------------------------------------------------------------\n";
+
+            orderList.forEach((item, index) => {
+                const sNo = String(index + 1).padStart(5, ' ');
+                
+                const numericPackSize = parseFloat(item.packSize);
+                let packDetails = "";
+                let isNosUnit = false;
+
+                if (item.unit.toLowerCase().includes('nos') || item.unit.toLowerCase().includes('tab') || item.unit.toLowerCase().includes('cap') || item.unit.toLowerCase().includes('strip')) {
+                    isNosUnit = true;
+                }
+
+                if (isNosUnit) {
+                    packDetails = item.unit.padEnd(16, ' '); 
+                }
+                else if (!isNaN(numericPackSize) && numericPackSize > 0) {
+                    let unitSuffix = 'ml';
+                    if (item.unit.toLowerCase().includes('g') || item.unit.toLowerCase().includes('gm')) {
+                        unitSuffix = 'g';
+                    }
+                    
+                    packDetails = `${item.unit.padEnd(7, ' ')} (${numericPackSize.toFixed(2)} ${unitSuffix})`;
+                } else {
+                    packDetails = item.unit.padEnd(16, ' '); 
+                }
+
+                const itemCode = item.code.padEnd(11, ' ');
+                const itemName = item.name.padEnd(25, ' ');
+                const quantity = String(item.qty).padStart(11, ' ');
+                const packInfo = packDetails;
+
+                outputText += ` ${sNo} | ${itemCode} | ${itemName} | ${quantity} | ${packInfo}\n`;
+            });
+            
+            outputText += "\n========================================================\n";
+            outputText += `  Total Unique Items to Order: ${orderList.length}`;
+            outputText += "\n========================================================\n";
+
+            // 3. Create a dedicated container for printing
+            printContainer = document.createElement('div');
+            printContainer.classList.add('print-only-container');
+            printContainer.innerHTML = `<pre>${outputText}</pre>`;
+            document.body.appendChild(printContainer);
+
+            // 4. Trigger print
+            window.print();
+        }
+        
+        // --- Event listeners to clean up the print container ---
+        if (window.matchMedia) {
+            window.matchMedia('print').addListener(function(mql) {
+                if (!mql.matches) {
+                    // This runs AFTER the print dialog is closed (either Print or Cancel)
+                    if (printContainer) {
+                        document.body.removeChild(printContainer);
+                        printContainer = null;
+                    }
+                }
+            });
+        }
+        
+        // Fallback for older browsers (though less reliable)
+        window.onafterprint = function() {
+            if (printContainer) {
+                document.body.removeChild(printContainer);
+                printContainer = null;
+            }
+        };
+    </script>
+</body>
+</html>

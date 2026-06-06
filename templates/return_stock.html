@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Return Stock</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .return-form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            align-items: start; /* Changed to start for better alignment */
+            margin-top: 1rem;
+        }
+        /* Style for search results container */
+        .search-container {
+            position: relative;
+        }
+        #searchResults {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            border: 1px solid #ccc;
+            border-top: none;
+            background: #fff;
+            max-height: 200px;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: none;
+        }
+        #searchResults div {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        #searchResults div:hover {
+            background: #f0f0f0;
+        }
+        .payment-options-return {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+        .payment-option-box-return {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <h1 class="logo">Billing App</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('billing') }}" class="nav-link">Billing</a>
+                <a href="{{ url_for('sales_report') }}" class="nav-link">Sales Report</a>
+                <a href="{{ url_for('add_stock') }}" class="nav-link">Add/Update Stock</a>
+                <a href="{{ url_for('return_stock') }}" class="nav-link active">Return Stock</a>
+                <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <h2 class="page-title">Process Returned Medicine</h2>
+            <div class="card p-4">
+                <p>Use this tool to add medicine back into stock due to a customer return. **This will deduct the amount from today's sales totals.**</p>
+                <div class="search-container mb-4">
+                    <label for="returnMedicineSearch">Search Medicine by Name/Code</label>
+                    <input id="returnMedicineSearch" class="form-control" placeholder="Start typing medicine name...">
+                    <div id="searchResults" class="search-results"></div>
+                </div>
+
+                <div id="returnDetailsCard" class="card p-4" style="display: none;">
+                    <h3>Return Details</h3>
+                    <p><strong>Item:</strong> <span id="returnItemName"></span> (<span id="returnItemCode"></span>)</p>
+                    <p><strong>Pack Price:</strong> ₹<span id="packPrice">0.00</span> | <strong>Loose Price:</strong> ₹<span id="loosePrice">0.00</span></p>
+                    <p><strong>Units:</strong> Pack (<span id="packUnit"></span>) | Loose (<span id="looseUnit"></span>)</p>
+                    <hr>
+                    <div class="return-form-grid">
+                        <div class="form-group">
+                            <label for="returnQty">Quantity to Return</label>
+                            <input type="number" id="returnQty" class="form-control" value="1" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="returnUnitType">Unit Type</label>
+                            <select id="returnUnitType" class="form-control">
+                                <option value="pack">Pack</option>
+                                <option value="loose">Loose</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label>Payment Method (Original or Refunded as)</label>
+                            <div class="payment-options-return">
+                                <label class="payment-option-box-return">
+                                    <input type="radio" name="return-payment-method" value="Cash" checked> Cash
+                                </label>
+                                <label class="payment-option-box-return">
+                                    <input type="radio" name="return-payment-method" value="GPay"> GPay
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <button id="processReturnBtn" class="btn btn-danger" style="width: 100%;">Process Return & Deduct Sales</button>
+                        </div>
+                        <div id="statusMessage" class="status-message" style="grid-column: span 2;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="main-footer">
+            <p>&copy; 2025 Billing Software</p>
+        </footer>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const searchInput = document.getElementById('returnMedicineSearch');
+            const searchResults = document.getElementById('searchResults');
+            const detailsCard = document.getElementById('returnDetailsCard');
+            const processReturnBtn = document.getElementById('processReturnBtn');
+            const returnQtyInput = document.getElementById('returnQty');
+            const returnUnitType = document.getElementById('returnUnitType');
+            const statusMessage = document.getElementById('statusMessage');
+
+            let selectedMedicine = null;
+
+            // --- Search Logic (Similar to Billing.js) ---
+            searchInput.addEventListener('input', async () => {
+                const query = searchInput.value.trim();
+                searchResults.innerHTML = '';
+                detailsCard.style.display = 'none';
+                selectedMedicine = null;
+
+                if (query.length > 1) {
+                    try {
+                        const resp = await fetch(`/search_medicine?query=${encodeURIComponent(query)}`);
+                        const medicines = await resp.json();
+                        searchResults.style.display = 'block';
+
+                        medicines.forEach(item => {
+                            const div = document.createElement('div');
+                            div.textContent = `${item.name} (${item.code || '-'})`;
+                            div.addEventListener('click', () => {
+                                selectItem(item);
+                                searchInput.value = item.name;
+                                searchResults.style.display = 'none';
+                            });
+                            searchResults.appendChild(div);
+                        });
+                    } catch (e) {
+                        console.error('Error fetching search results:', e);
+                    }
+                } else {
+                    searchResults.style.display = 'none';
+                }
+            });
+
+            // --- Select Item & Populate Details ---
+            function selectItem(item) {
+                selectedMedicine = item;
+                document.getElementById('returnItemName').textContent = item.name;
+                document.getElementById('returnItemCode').textContent = item.code || '-';
+                
+                document.getElementById('packPrice').textContent = (item.mrp || 0).toFixed(2);
+                document.getElementById('loosePrice').textContent = (item.loose_mrp || 0).toFixed(2);
+
+                document.getElementById('packUnit').textContent = item.unit || 'N/A';
+                document.getElementById('looseUnit').textContent = item.loose_unit || 'N/A';
+                
+                detailsCard.style.display = 'block';
+                statusMessage.textContent = '';
+                returnQtyInput.value = 1;
+            }
+
+            // --- Return Logic ---
+            processReturnBtn.addEventListener('click', async () => {
+                if (!selectedMedicine) {
+                    statusMessage.textContent = 'Please select a medicine first.';
+                    statusMessage.style.color = 'red';
+                    return;
+                }
+
+                const qtyToReturn = parseFloat(returnQtyInput.value);
+                const unitType = returnUnitType.value;
+                const paymentMethod = document.querySelector('input[name="return-payment-method"]:checked').value;
+
+                if (isNaN(qtyToReturn) || qtyToReturn <= 0) {
+                    statusMessage.textContent = 'Invalid quantity.';
+                    statusMessage.style.color = 'red';
+                    return;
+                }
+                
+                statusMessage.textContent = 'Processing return...';
+                statusMessage.style.color = 'blue';
+
+                const returnData = {
+                    medicine_id: selectedMedicine.id,
+                    quantity: qtyToReturn,
+                    unit_type: unitType,
+                    payment_method: paymentMethod
+                };
+
+                try {
+                    const resp = await fetch('/return_medicine', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(returnData)
+                    });
+                    const result = await resp.json();
+
+                    if (resp.ok) {
+                        statusMessage.textContent = result.message;
+                        statusMessage.style.color = 'green';
+                        // Clear the item/reset the view for the next return
+                        searchInput.value = '';
+                        detailsCard.style.display = 'none';
+                        selectedMedicine = null;
+                    } else {
+                        statusMessage.textContent = `Error: ${result.message || 'Failed to process return.'}`;
+                        statusMessage.style.color = 'red';
+                    }
+                } catch (e) {
+                    statusMessage.textContent = 'An unexpected network error occurred.';
+                    statusMessage.style.color = 'red';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

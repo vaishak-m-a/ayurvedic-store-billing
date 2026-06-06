@@ -1,0 +1,440 @@
+/* ================== General Styles ================== */
+:root {
+    --primary-color: #0b1a32;
+    --secondary-color: #a4781d;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --warning-color: #ffc107;
+    --info-color: #17a2b8;
+    --light-color: #f8f9fa;
+    --dark-color: #343a40;
+    --primary-text: #212529;
+    --secondary-text: #6c757d;
+    --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    background-color: #f4f6f9;
+    color: var(--primary-text);
+}
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* ================== Header & Navigation ================== */
+.main-header {
+    background-color: var(--primary-color);
+    color: #fff;
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--card-shadow);
+}
+
+.main-header .logo {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: var(--secondary-color);
+}
+
+.main-nav {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.nav-link {
+    color: var(--light-color);
+    text-decoration: none;
+    font-weight: 500;
+    padding: 0.5rem;
+    transition: color 0.3s ease, background-color 0.3s ease;
+    border-radius: 5px;
+}
+
+.nav-link:hover, .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--secondary-color);
+}
+
+.nav-link.active {
+    border-bottom: 2px solid var(--secondary-color);
+}
+
+/* ================== Main Content & Layout ================== */
+.main-content {
+    flex-grow: 1;
+    padding: 2rem;
+}
+
+.page-title {
+    font-size: 2rem;
+    color: var(--primary-color);
+    margin-bottom: 1.5rem;
+}
+
+.card {
+    background: #fff;
+    border-radius: 0.75rem;
+    box-shadow: var(--card-shadow);
+    padding: 1.5rem;
+}
+
+.mt-3 { margin-top: 1rem; }
+.p-4 { padding: 1.5rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-4 { margin-bottom: 1.5rem; }
+
+/* ================== Dashboard & Sales Report Styles ================== */
+.summary-cards {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.card-summary {
+    flex: 1;
+    padding: 1.5rem;
+    border-radius: 10px;
+    color: #fff;
+    text-align: center;
+    box-shadow: var(--card-shadow);
+}
+
+.card-summary h3 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+
+.card-summary p {
+    font-size: 2.2rem;
+    font-weight: bold;
+    margin-top: 0.5rem;
+}
+
+.bg-total { background-color: var(--primary-color); }
+.bg-low { background-color: var(--warning-color); color: var(--primary-text); }
+.bg-out { background-color: var(--danger-color); }
+
+.warning-banner {
+    background-color: var(--warning-color);
+    border: 1px solid #ffeeba;
+    color: var(--primary-text);
+    padding: 0.75rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    text-align: center;
+}
+
+.dashboard-container {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    margin: auto;
+}
+
+.top-sellers-list {
+    list-style-type: none;
+    padding: 0;
+    margin-top: 1rem;
+}
+
+.top-sellers-list li {
+    padding: 0.75rem;
+    border-bottom: 1px solid #eee;
+}
+
+.top-sellers-list li:last-child {
+    border-bottom: none;
+}
+
+
+/* ================== Add Stock & Table Styles ================== */
+.table-responsive {
+    overflow-x: auto;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.table th, .table td {
+    padding: 12px 15px;
+    border: 1px solid #dee2e6;
+    text-align: left;
+}
+
+.table thead th {
+    background-color: var(--primary-color);
+    color: #fff;
+    border-color: var(--primary-color);
+}
+
+.table tbody tr:nth-child(odd) {
+    background-color: #f2f2f2;
+}
+
+.low-stock {
+    color: var(--danger-color);
+    font-weight: bold;
+}
+
+.update-form {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.update-form input {
+    width: 60px;
+}
+
+.search-box {
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 0.5rem;
+}
+
+#searchInput {
+    flex-grow: 1;
+    padding: 0.75rem;
+}
+
+.search-container {
+    position: relative;
+    flex-grow: 1;
+}
+
+.search-results {
+    position: absolute;
+    z-index: 10;
+    width: 100%;
+    border: 1px solid #ccc;
+    border-top: none;
+    background: #fff;
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    display: none;
+}
+
+.search-results div {
+    padding: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+
+.search-results div:hover {
+    background: #f0f0f0;
+}
+
+/* ================== Buttons ================== */
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+    text-decoration: none;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: #fff;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+}
+
+.btn-danger {
+    background-color: var(--danger-color);
+    color: #fff;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+}
+
+.btn-success {
+    background-color: #008744;
+    color: #fff;
+    box-shadow: 0 2px 5px rgba(0, 135, 68, 0.4);
+    transition: all 0.3s ease;
+}
+
+.btn-success:hover {
+    background-color: #006a36;
+    box-shadow: 0 4px 10px rgba(0, 135, 68, 0.6);
+    transform: translateY(-1px);
+}
+
+.billing-controls {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 2rem;
+}
+
+.payment-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.payment-option-box {
+    padding: 0.75rem 1rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.payment-option-box input {
+    margin-right: 0.5rem;
+}
+
+.button-group {
+    display: flex;
+    gap: 1rem;
+    flex-grow: 1;
+}
+
+.button-group .btn {
+    flex: 1;
+}
+
+/* ================== Footer ================== */
+.main-footer {
+    text-align: center;
+    padding: 1rem;
+    background-color: var(--primary-color);
+    color: var(--light-color);
+    margin-top: auto;
+}
+
+/* ================== Login Page Styles ================== */
+body.login-body {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: #f4f6f9;
+    font-family: Arial, sans-serif;
+    color: var(--primary-text);
+}
+
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+.login-box {
+    background: #fff;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    width: 450px;
+    max-width: 90%;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+.login-box h2 {
+    font-size: 2.2rem;
+    margin-bottom: 10px;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.text-muted {
+    font-size: 1rem;
+    margin-bottom: 25px;
+    color: var(--secondary-text);
+}
+
+.form-group {
+    text-align: left;
+    margin-bottom: 20px;
+}
+
+label {
+    font-weight: 600;
+    display: block;
+    margin-bottom: 8px;
+}
+
+input.form-control {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 1rem;
+    line-height: 1.5;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+input.form-control:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+}
+
+.btn.btn-primary {
+    padding: 15px;
+    font-size: 1.1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 100%;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: background-color 0.3s ease, transform 0.1s ease;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+    transform: translateY(-2px);
+}
+
+.error-message {
+    color: var(--danger-color);
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 20px;
+    font-size: 0.9rem;
+    text-align: center;
+}

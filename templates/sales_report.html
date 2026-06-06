@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Report</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .summary-section {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .sale-item {
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .summary-section .grand-total {
+            background-color: var(--dark-color);
+            color: #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <h1 class="logo">Billing App</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('billing') }}" class="nav-link">Billing</a>
+                <a href="{{ url_for('sales_report') }}" class="nav-link active">Sales Report</a>
+                <a href="{{ url_for('add_stock') }}" class="nav-link">Add/Update Stock</a>
+                <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
+                <a href="{{ url_for('out_of_stock') }}" class="nav-link">Order Stock</a>
+                <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
+            </nav>
+        </header>
+        
+        <div class="main-content sales-report-content">
+            <h2 class="page-title">Sales Report ({{ selected_date|default("Today") }})</h2>
+            
+            <form method="get" class="date-filter">
+                <label for="date">Select Date:</label>
+                <input type="date" id="date" name="date" value="{{ selected_date }}">
+                <button type="submit" class="btn btn-primary">View</button>
+            </form>
+
+            <div class="report-section card p-4 mt-4">
+                <h3>All Bills for the Day</h3>
+                {% if all_bills %}
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Bill ID</th>
+                                <th>Total (₹)</th>
+                                <th>Payment Method</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for bill in all_bills %}
+                                <tr id="bill-row-{{ bill.id }}">
+                                    <td>{{ bill.id }}</td>
+                                    <td>{{ '%.2f'|format(bill.total) }}</td>
+                                    <td>{{ bill.payment_method }}</td>
+                                    <td>
+                                        <a href="{{ url_for('edit_bill', bill_id=bill.id) }}" class="btn btn-secondary">Edit</a>
+                                        <button class="btn btn-danger delete-bill-btn" data-bill-id="{{ bill.id }}">Delete</button>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p>No bills recorded for this date.</p>
+                {% endif %}
+            </div>
+
+            <div class="report-section card p-4 mt-4">
+                <h3>Medicine Sales</h3>
+                <table class="report-table">
+                    <thead>
+                        <tr>
+                            <th>Medicine</th>
+                            <th>Quantity Sold</th>
+                            <th>Unit Price (₹)</th>
+                            <th>Total (₹)</th>
+                            <th>Cash (₹)</th>
+                            <th>GPay (₹)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in medicine_sales %}
+                        <tr>
+                            <td>{{ item.name }}</td>
+                            <td>{{ item.qty_sold }}</td>
+                            <td>{{ '%.2f'|format(item.unit_price) }}</td>
+                            <td>{{ '%.2f'|format(item.total_sales) }}</td>
+                            <td>{{ '%.2f'|format(item.cash_amount) }}</td>
+                            <td>{{ '%.2f'|format(item.gpay_amount) }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="insights card p-4 mt-4">
+                <h3>Insights</h3>
+                {% if top_item %}
+                    <p><strong>Top Selling Item:</strong> {{ top_item.name }} ({{ top_item.quantity }} sold)</p>
+                {% else %}
+                    <p><strong>Top Selling Item:</strong> No items sold today</p>
+                {% endif %}
+                <p><strong>Total Bills:</strong> {{ total_bills }}</p>
+                <p><strong>Average Order Value:</strong> ₹{{ '%.2f'|format(avg_order_value) }}</p>
+            </div>
+            
+        </div>
+        
+        <footer class="main-footer">
+            <p>&copy; 2025 Billing Software</p>
+        </footer>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.delete-bill-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const billId = e.target.dataset.billId;
+                    if (confirm(`Are you sure you want to delete bill ${billId}? This will return all stock.`)) {
+                        try {
+                            const response = await fetch(`/delete_bill/${billId}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+
+                            if (response.ok) {
+                                alert(`Bill ${billId} deleted successfully.`);
+                                window.location.reload();
+                            } else {
+                                const result = await response.json();
+                                alert(`Error deleting bill: ${result.message}`);
+                            }
+                        } catch (error) {
+                            alert('An unexpected error occurred while deleting the bill.');
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
+```

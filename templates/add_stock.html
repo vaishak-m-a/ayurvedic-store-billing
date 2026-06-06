@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Management</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <h1 class="logo">Billing App</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('billing') }}" class="nav-link">Billing</a>
+                <a href="{{ url_for('sales_report') }}" class="nav-link">Sales Report</a>
+                <a href="{{ url_for('add_stock') }}" class="nav-link active">Stock Management</a>
+                <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
+                <a href="{{ url_for('out_of_stock') }}" class="nav-link">Order Stock</a>
+                <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <h2 class="page-title">Stock Management Menu</h2>
+            <div class="card p-4 text-center">
+                <p>Welcome to the consolidated stock management area. Please select an action:</p>
+                <div style="display: flex; gap: 2rem; justify-content: center; margin-top: 2rem;">
+                    <a href="{{ url_for('add_new_product') }}" class="btn btn-primary" style="width: 250px; padding: 1rem;">Add a Brand New Product</a>
+                    <a href="{{ url_for('add_date_stock') }}" class="btn btn-success" style="width: 250px; padding: 1rem;">Add Stock Batch / Correction</a>
+                </div>
+            </div>
+        </div>
+
+        <footer class="main-footer">
+            <p>&copy; 2025 Billing Software</p>
+        </footer>
+    </div>
+</body>
+</html>

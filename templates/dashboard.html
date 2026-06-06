@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .summary-cards {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .card-summary {
+            flex: 1;
+            padding: 1.5rem;
+            border-radius: 10px;
+            color: #fff;
+            text-align: center;
+        }
+        .card-summary h3 { margin: 0; font-size: 1.2rem; }
+        .card-summary p { font-size: 2.2rem; font-weight: bold; margin-top: 0.5rem; }
+        
+        /* New colors for weekly and monthly sales cards */
+        .bg-total { background-color: #007bff; }
+        .bg-low { background-color: #ffc107; color: #000; }
+        .bg-out { background-color: #dc3545; }
+        .bg-week { background-color: #17a2b8; }
+        .bg-month { background-color: #28a745; }
+        .bg-yesterday { background-color: #6c757d; }
+
+        .dashboard-container {
+            /* Changed to 2-column layout for reconciliation report */
+            display: grid;
+            grid-template-columns: 1fr 1fr; 
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .chart-container { position: relative; height: 300px; margin: auto; }
+        
+        .top-sellers-list { list-style-type: none; padding: 0; margin-top: 1rem; }
+        .top-sellers-list li { padding: 0.75rem; border-bottom: 1px solid #eee; }
+        .top-sellers-list li:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <h1 class="logo">Billing App</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link active">Dashboard</a>
+                <a href="{{ url_for('billing') }}" class="nav-link">Billing</a>
+                <a href="{{ url_for('sales_report') }}" class="nav-link">Sales Report</a>
+                <a href="{{ url_for('add_stock') }}" class="nav-link">Stock Management</a>
+                <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
+                <a href="{{ url_for('out_of_stock') }}" class="nav-link">Order Stock</a>
+                <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
+            </nav>
+        </header>
+
+        <div class="main-content dashboard-content">
+            <h2 class="page-title">Sales Dashboard for Today</h2>
+
+            <div class="summary-cards">
+                <div class="card-summary bg-total">
+                    <h3>Today's Total</h3>
+                    <p>₹{{ '%.2f'|format(grand_total) }}</p>
+                </div>
+                <div class="card-summary bg-low">
+                    <h3>Cash Sales (Today)</h3>
+                    <p>₹{{ '%.2f'|format(cash_total) }}</p>
+                </div>
+                <div class="card-summary bg-out">
+                    <h3>GPay Sales (Today)</h3>
+                    <p>₹{{ '%.2f'|format(gpay_total) }}</p>
+                </div>
+            </div>
+
+            <div class="summary-cards">
+                <div class="card-summary bg-yesterday">
+                    <h3>Yesterday's Sales</h3>
+                    <p>₹{{ '%.2f'|format(yesterday_total) }}</p>
+                </div>
+                <div class="card-summary bg-week">
+                    <h3>Weekly Sales</h3>
+                    <p>₹{{ '%.2f'|format(weekly_total) }}</p>
+                </div>
+                <div class="card-summary bg-month">
+                    <h3>Monthly Sales</h3>
+                    <p>₹{{ '%.2f'|format(monthly_total) }}</p>
+                </div>
+            </div>
+
+            <h2 class="page-title mt-4">Daily Cash Flow Reconciliation ({{ today|date_format }})</h2>
+            
+            <div class="dashboard-container">
+                <div class="card p-4">
+                    <h3>Cash Movement Summary</h3>
+                    <table class="table">
+                        <tbody>
+                            <tr>
+                                <td style="width: 70%; font-weight: bold;">Opening Balance (Yesterday's Cash Sales)</td>
+                                <td style="text-align: right; font-weight: bold;">₹{{ '%.2f'|format(opening_balance) }}</td>
+                            </tr>
+                            <tr>
+                                <td>(+) Today's Cash Sales (Positive Revenue)</td>
+                                <td style="text-align: right;">₹{{ '%.2f'|format(today_cash_collected) }}</td>
+                            </tr>
+                            <tr>
+                                <td>(+) Bank Withdrawals (Cash Into Hand)</td>
+                                <td style="text-align: right;">₹{{ '%.2f'|format(bank_withdrawals_in) }}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="2" style="font-weight: bold; background-color: #f0f0f0;">--- Deductions (Cash Out) ---</td>
+                            </tr>
+                            <tr>
+                                <td>(-) Returns/Refunds Issued</td>
+                                <td style="text-align: right;">₹{{ '%.2f'|format(return_medicine_amount) }}</td>
+                            </tr>
+                            <tr>
+                                <td>(-) Other Business Expenses</td>
+                                <td style="text-align: right;">₹{{ '%.2f'|format(other_expenses) }}</td>
+                            </tr>
+                            <tr>
+                                <td>(-) Bank Deposits (Cash Out of Hand)</td>
+                                <td style="text-align: right;">₹{{ '%.2f'|format(bank_deposits_out) }}</td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold;">Expected Cash in Hand (Closing Balance)</td>
+                                <td style="text-align: right; font-weight: bold; border-top: 2px solid var(--primary-text);">
+                                    ₹{{ '%.2f'|format(closing_balance) }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="card p-4">
+                    <h3>Sales Breakdown (Today)</h3>
+                    <div class="chart-container">
+                        <canvas id="salesChart"></canvas>
+                    </div>
+                </div>
+                
+            </div>
+
+            <div class="dashboard-container mt-4">
+                
+                <div class="card p-4">
+                    <h3>Daily Sales (Last 30 Days)</h3>
+                    <div class="chart-container">
+                        <canvas id="dailySalesChart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="card p-4">
+                    <h3>Credit/Expense Log Details</h3>
+                    <p><strong>Credits Outstanding Total:</strong> ₹{{ '%.2f'|format(credit_given) }}</p>
+                    <p class="text-muted">Note: Closing Balance tracks cash only; GPay/Net sales are separate.</p>
+                    <a href="{{ url_for('finance_log') }}" class="btn btn-secondary mt-3">View Full Finance Log</a>
+                </div>
+            </div>
+
+            <div class="card p-4 mt-4">
+                <h3>Top 3 Selling Items Today</h3>
+                {% if top_sellers %}
+                    <ol class="top-sellers-list">
+                        {% for item in top_sellers %}
+                            <li>{{ item.name }} ({{ '%.1f'|format(item.qty_sold) }} {{ item.unit }})</li>
+                        {% endfor %}
+                    </ol>
+                {% else %}
+                    <p class="mt-3">No sales recorded today.</p>
+                {% endif %}
+            </div>
+
+        </div>
+
+        <footer class="main-footer">
+            <p>&copy; 2025 Billing Software</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Pie chart (Cash vs GPay sales today)
+        const cashSales = {{ cash_total }};
+        const gpaySales = {{ gpay_total }};
+
+        const ctx = document.getElementById('salesChart');
+        new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Cash', 'GPay'],
+                datasets: [{
+                    label: 'Sales by Payment Method',
+                    data: [cashSales, gpaySales],
+                    backgroundColor: ['#ffc107', '#dc3545'],
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(tooltipItem) {
+                                let label = tooltipItem.label || '';
+                                if (label) label += ': ';
+                                label += '₹' + tooltipItem.raw.toFixed(2);
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Line chart (Daily sales last 30 days)
+        fetch("/sales_trend")
+            .then(response => response.json())
+            .then(data => {
+                const ctx2 = document.getElementById("dailySalesChart").getContext("2d");
+                new Chart(ctx2, {
+                    type: "line",
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: "Daily Sales",
+                            data: data.values,
+                            borderColor: "#28a745",
+                            backgroundColor: "rgba(40, 167, 69, 0.2)",
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: { legend: { display: true } },
+                        scales: {
+                            x: { title: { display: true, text: "Date" } },
+                            y: { title: { display: true, text: "Sales (₹)" } }
+                        }
+                    }
+                });
+            });
+    </script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Batch Detail - {{ selected_date }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <h1 class="logo">Billing App</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('billing') }}" class="nav-link">Billing</a>
+                <a href="{{ url_for('sales_report') }}" class="nav-link">Sales Report</a>
+                <a href="{{ url_for('add_stock') }}" class="nav-link active">Stock Management</a>
+                <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
+                <a href="{{ url_for('out_of_stock') }}" class="nav-link">Order Stock</a>
+                <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <h2 class="page-title">Stock Updates Log for {{ selected_date }}</h2>
+            <div class="card p-4">
+                <p>Use this page to review and, if necessary, delete individual stock batch entries for the selected day. Deleting an entry will **automatically deduct the corresponding quantity from the current stock**.</p>
+                <a href="{{ url_for('add_date_stock') }}" class="btn btn-secondary mb-4">← Back to Add Stock Batch</a>
+                
+                <div class="table-responsive">
+                    <table class="table table-striped" id="batchLogTable">
+                        <thead>
+                            <tr>
+                                <th>Name / Code</th>
+                                <th>Packs Added</th>
+                                <th>Base Units Added</th>
+                                <th>Pack Size</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="batchLogBody">
+                            {% if batches %}
+                                {% for batch in batches %}
+                                <tr id="batch-row-{{ batch.id }}">
+                                    <td>{{ batch.name }} ({{ batch.code or '-' }})</td>
+                                    <td>{{ '%.2f'|format(batch.packs_added) }}</td>
+                                    <td>{{ '%.2f'|format(batch.units_added) }} {{ batch.unit or 'units' }}</td>
+                                    <td>{{ '%.2f'|format(batch.pack_size_ml) }} {{ batch.unit or 'ml/g' }}</td>
+                                    <td>
+                                        <button class="btn btn-danger btn-sm delete-batch-btn" 
+                                                data-id="{{ batch.id }}"
+                                                data-name="{{ batch.name }}"
+                                                data-units="{{ '%.2f'|format(batch.units_added) }}"
+                                                data-unit-type="{{ batch.unit or 'units' }}">Delete</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr><td colspan="5" class="text-center text-muted">No stock batches found for this date.</td></tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div id="statusMessage" class="status-message mt-3" style="display: none;"></div>
+
+            </div>
+        </div>
+
+        <footer class="main-footer">
+            <p>&copy; 2025 Billing Software</p>
+        </footer>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const statusMessage = document.getElementById('statusMessage');
+
+            function showStatus(message, isError = false) {
+                statusMessage.textContent = message;
+                statusMessage.style.color = isError ? 'red' : 'green';
+                statusMessage.style.display = 'block';
+                setTimeout(() => statusMessage.style.display = 'none', 5000);
+            }
+
+            document.querySelectorAll('.delete-batch-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const batchId = e.target.dataset.id;
+                    const itemName = e.target.dataset.name;
+                    const units = e.target.dataset.units;
+                    const unitType = e.target.dataset.unitType;
+                    
+                    if (confirm(`WARNING: Are you sure you want to delete the stock batch for ${itemName}? This will deduct ${units} ${unitType} from the current inventory stock.`)) {
+                        
+                        showStatus(`Processing deletion for Batch ID ${batchId}...`, false);
+
+                        try {
+                            const response = await fetch(`/delete_stock_batch/${batchId}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' }
+                            });
+
+                            if (response.ok) {
+                                const result = await response.json();
+                                showStatus(result.message, false);
+                                // Remove row from table
+                                document.getElementById(`batch-row-${batchId}`).remove();
+                            } else {
+                                const result = await response.json();
+                                showStatus(`Error: ${result.message}`, true);
+                            }
+                        } catch (error) {
+                            showStatus('An unexpected network error occurred.', true);
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

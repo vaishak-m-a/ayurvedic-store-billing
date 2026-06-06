@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Stock Batch</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .header-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .stock-batch-date {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        .table-responsive {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        #stock-table th {
+            position: sticky;
+            top: 0;
+            background-color: var(--primary-color);
+            z-index: 1;
+        }
+        .update-form {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .update-form input {
+            width: 70px;
+        }
+        .stock-action-cell {
+            white-space: nowrap;
+        }
+        .stock-info {
+            font-size: 0.85rem;
+            color: var(--secondary-text);
+        }
+        /* New Styles for Stock Log Viewer */
+        .stock-log-viewer {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .log-controls {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        #stockLogTable td:nth-child(4) {
+            text-align: right;
+        }
+        .date-link {
+            cursor: pointer;
+            color: var(--primary-color);
+            text-decoration: underline;
+        }
+
+        /* Styles for search suggestion box (similar to billing page) */
+        .search-container-relative {
+            position: relative;
+            margin-bottom: 1rem;
+        }
+        #search-results-suggestions {
+            position: absolute;
+            z-index: 10;
+            width: 100%;
+            border: 1px solid #ccc;
+            border-top: none;
+            background: #fff;
+            max-height: 200px;
+            overflow-y: auto;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: none; /* Initially hidden */
+        }
+        #search-results-suggestions div {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #eee;
+        }
+        #search-results-suggestions div:hover {
+            background: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <h1 class="logo">Billing App</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('billing') }}" class="nav-link">Billing</a>
+                <a href="{{ url_for('sales_report') }}" class="nav-link">Sales Report</a>
+                <a href="{{ url_for('add_stock') }}" class="nav-link active">Stock Management</a>
+                <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
+                <a href="{{ url_for('out_of_stock') }}" class="nav-link">Order Stock</a>
+                <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <h2 class="page-title">Add Stock Batch / Correction</h2>
+            <div class="card p-4">
+                <div class="header-controls">
+                    <div>
+                        <a href="{{ url_for('add_new_product') }}" class="btn btn-secondary">Define New Product</a>
+                    </div>
+                    <div class="stock-batch-date">
+                        <label for="batchDate">Batch Date:</label>
+                        <input type="date" id="batchDate" value="{{ today_date }}" class="form-control" style="width: 150px; display: inline-block;">
+                    </div>
+                </div>
+
+                <div class="search-container-relative">
+                    <input type="text" id="searchInput" class="form-control" placeholder="Search medicine by name or code to add stock or correct..." onkeyup="filterStock()">
+                    <div id="search-results-suggestions" class="search-results"></div>
+                </div>
+
+                <div id="statusMessage" class="status-message mt-3" style="display: none;"></div>
+
+                <div class="table-responsive">
+                    <table class="table table-striped" id="stock-table">
+                        <thead>
+                            <tr>
+                                <th>Name / Code</th>
+                                <th>Pack Size</th>
+                                <th>MRP (₹)</th>
+                                <th>Current Stock (Units)</th>
+                                <th class="stock-action-cell">Add Stock (Packs) / Correct</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stock-body">
+                            {% for item in medicines %}
+                            <tr data-id="{{ item.id }}" data-name="{{ item.name }}" data-code="{{ item.code }}" data-pack-unit="{{ item.unit or 'ml' }}" data-pack-size="{{ '%.2f'|format(item.pack_size_ml or 0) }}">
+                                <td>
+                                    {{ item.name }}
+                                    <div class="stock-info">Code: {{ item.code or '-' }}</div>
+                                </td>
+                                <td>{{ item.unit or '-' }} ({{ '%.2f'|format(item.pack_size_ml or 0) }} ml/g)</td>
+                                <td><input type="number" class="form-control mrp-input" value="{{ '%.2f'|format(item.mrp) }}" data-id="{{ item.id }}" min="0" step="0.01"></td>
+                                <td class="stock-cell">{{ '%.2f'|format(item.stock or 0) }} {{ item.unit or 'ml' }}</td>
+                                <td>
+                                    <div class="update-form">
+                                        <input type="number" class="form-control packs-input" value="0" step="0.01">
+                                        <button class="btn btn-success add-batch-btn" data-id="{{ item.id }}">Add Batch</button>
+                                        <button class="btn btn-secondary correct-stock-btn" data-id="{{ item.id }}">Correct</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Section for Viewing Stock Updates (Modified) -->
+            <div class="stock-log-viewer">
+                <h3>Review Stock Updates History</h3>
+                <p class="text-muted">Select a date below to view and manage individual stock batches added on that day.</p>
+                <div class="log-controls">
+                    <label for="logDate">Select Date:</label>
+                    <input type="date" id="logDate" class="form-control" value="{{ today_date }}" style="width: 150px;">
+                    <button class="btn btn-primary" id="viewLogBtn">View & Edit Batches</button>
+                </div>
+                
+                <div class="table-responsive mt-3">
+                    <table class="table table-striped" id="stockLogTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Total Batches Added</th>
+                                <th>View</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stockLogBody">
+                            <tr><td colspan="3" class="text-center text-muted">Loading historical stock update dates...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <footer class="main-footer">
+            <p>&copy; 2025 Billing Software</p>
+        </footer>
+    </div>
+    
+    <script>
+        const searchInput = document.getElementById('searchInput');
+        const searchResultsSuggestions = document.getElementById('search-results-suggestions'); // NEW ELEMENT
+        const stockTableBody = document.getElementById('stock-body');
+        const statusMessage = document.getElementById('statusMessage');
+        const logDateInput = document.getElementById('logDate');
+        const viewLogBtn = document.getElementById('viewLogBtn');
+        const stockLogBody = document.getElementById('stockLogBody');
+
+
+        // Initial load and rendering functions (unchanged)
+        const initialMedicines = {{ medicines|tojson }};
+        function renderTable(medicines) {
+            stockTableBody.innerHTML = '';
+            if (medicines.length === 0) {
+                stockTableBody.innerHTML = '<tr><td colspan="5" class="text-center">No medicines found.</td></tr>';
+                return;
+            }
+            medicines.forEach(item => {
+                // Determine the unit to display, defaulting to 'ml'
+                const unitDisplay = item.unit || 'ml';
+
+                const row = document.createElement('tr');
+                row.setAttribute('data-id', item.id);
+                row.setAttribute('data-name', item.name); // Added for filter/search ease
+                row.setAttribute('data-code', item.code || ''); // Added for filter/search ease
+                row.setAttribute('data-pack-unit', item.unit || 'ml');
+                row.setAttribute('data-pack-size', (item.pack_size_ml || 0).toFixed(2));
+                
+                row.innerHTML = `
+                    <td>
+                        ${item.name}
+                        <div class="stock-info">Code: ${item.code || '-'}</div>
+                    </td>
+                    <td>${item.unit || '-'} (${(item.pack_size_ml || 0).toFixed(2)} ml/g)</td>
+                    <td><input type="number" class="form-control mrp-input" value="${(item.mrp || 0).toFixed(2)}" data-id="${item.id}" min="0" step="0.01"></td>
+                    <td class="stock-cell">${(item.stock || 0).toFixed(2)} ${unitDisplay}</td>
+                    <td>
+                        <div class="update-form">
+                            <input type="number" class="form-control packs-input" value="0" step="0.01">
+                            <button class="btn btn-success add-batch-btn" data-id="${item.id}">Add Batch</button>
+                            <button class="btn btn-secondary correct-stock-btn" data-id="${item.id}">Correct</button>
+                        </div>
+                    </td>
+                `;
+                stockTableBody.appendChild(row);
+            });
+            attachEventListeners();
+        }
+
+        // --- Search Logic (Combining filter and suggestions) ---
+
+        // Function to filter the currently displayed table rows
+        function filterTable(query) {
+            const filter = query.toUpperCase();
+            let visibleRows = 0;
+            const rows = stockTableBody.querySelectorAll('tr[data-id]'); // Select only data rows, exclude hidden search row
+            
+            rows.forEach(row => {
+                const name = row.dataset.name.toUpperCase();
+                const code = row.dataset.code.toUpperCase();
+                
+                if (name.includes(filter) || code.includes(filter)) {
+                    row.style.display = "";
+                    visibleRows++;
+                } else {
+                    row.style.display = "none";
+                }
+            });
+        }
+        
+        let searchTimeout = null;
+
+        // Function to perform search and populate suggestions (AJAX)
+        async function performSearch(query) {
+            searchResultsSuggestions.innerHTML = '';
+            if (query.length > 1) {
+                try {
+                    const resp = await fetch(`/search_stock?query=${encodeURIComponent(query)}&limit=10`);
+                    const medicines = await resp.json();
+                    
+                    if (medicines.length > 0) {
+                        searchResultsSuggestions.style.display = 'block';
+                        medicines.forEach(item => {
+                            const div = document.createElement('div');
+                            div.textContent = `${item.name} (${item.code || '-'})`;
+                            div.addEventListener('click', () => {
+                                // Filter the main table to only show the selected item
+                                filterTable(item.name);
+                                searchInput.value = item.name;
+                                searchResultsSuggestions.style.display = 'none';
+                                searchInput.focus();
+                            });
+                            searchResultsSuggestions.appendChild(div);
+                        });
+                    } else {
+                        searchResultsSuggestions.style.display = 'none';
+                    }
+
+                } catch (e) {
+                    console.error('Error fetching search suggestions:', e);
+                }
+            } else {
+                searchResultsSuggestions.style.display = 'none';
+            }
+        }
+        
+        // Input event listener for combined functionality
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.trim();
+            // 1. Filter the main table view instantly
+            filterTable(query); 
+            
+            // 2. Clear timeout and start a new one for AJAX suggestions
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                performSearch(query);
+            }, 300);
+        });
+        
+        // Hide search results when clicking outside the search container
+        document.addEventListener('click', (event) => {
+            const isClickInside = searchInput.parentElement.contains(event.target);
+            if (!isClickInside) {
+                searchResultsSuggestions.style.display = 'none';
+            }
+        });
+
+        // --- End Search Logic ---
+
+        function showStatus(message, isError = false) {
+            statusMessage.textContent = message;
+            statusMessage.style.color = isError ? 'red' : 'green';
+            statusMessage.style.display = 'block';
+            setTimeout(() => statusMessage.style.display = 'none', 5000);
+        }
+
+        // Attach event listeners (Add Batch and Correction logic - unchanged)
+        function attachEventListeners() {
+            // --- ADD BATCH BUTTON LOGIC ---
+            document.querySelectorAll('.add-batch-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const row = e.target.closest('tr');
+                    const itemId = e.target.dataset.id;
+                    const packsInput = row.querySelector('.packs-input');
+                    const mrpInput = row.querySelector('.mrp-input');
+                    const batchDate = document.getElementById('batchDate').value;
+                    
+                    const packsToAdd = parseFloat(packsInput.value) || 0;
+                    const newMrp = parseFloat(mrpInput.value) || null;
+                    
+                    if (packsToAdd <= 0) {
+                        showStatus("Please enter a positive number of packs to add.", true);
+                        return;
+                    }
+                    
+                    showStatus("Adding stock batch...", false);
+
+                    try {
+                        const response = await fetch('/add_date_stock', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                id: itemId, 
+                                packs: packsToAdd, 
+                                mrp: newMrp,
+                                date: batchDate // Send the date
+                            })
+                        });
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            showStatus(result.message, false);
+                            
+                            // Update the stock and mrp cells on success
+                            const currentUnitCell = row.querySelector('.stock-cell');
+                            const currentUnit = row.dataset.packUnit || 'ml';
+                            
+                            const currentStockText = currentUnitCell.textContent.split(' ')[0]
+                            const currentStockValue = parseFloat(currentStockText) || 0;
+                            const newStock = currentStockValue + result.stock_units_added;
+                            
+                            currentUnitCell.textContent = `${newStock.toFixed(2)} ${currentUnit}`;
+                            
+                            if (result.mrp !== null) {
+                                mrpInput.value = result.mrp;
+                            }
+                            packsInput.value = 0; // Clear the packs input
+                            
+                            // Reload the log dates after successful addition
+                            loadStockLogDates(); 
+                        } else {
+                            showStatus(`Error: ${result.message}`, true);
+                        }
+                    } catch (error) {
+                        showStatus('An unexpected error occurred.', true);
+                    }
+                });
+            });
+            
+            // --- CORRECTION/REMOVAL BUTTON LOGIC ---
+            document.querySelectorAll('.correct-stock-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const row = e.target.closest('tr');
+                    const itemId = e.target.dataset.id;
+                    const packsInput = row.querySelector('.packs-input');
+                    const mrpInput = row.querySelector('.mrp-input');
+                    
+                    const packsToCorrect = parseFloat(packsInput.value) || 0;
+                    const newMrp = parseFloat(mrpInput.value) || null;
+                    
+                    if (packsToCorrect > 0) {
+                        showStatus("Use 'Add Batch' button to add stock, or enter a negative value to remove stock.", true);
+                        return;
+                    }
+                    if (packsToCorrect === 0 && newMrp === null) {
+                        showStatus("Enter packs to remove (negative) or a new MRP to correct.", true);
+                        return;
+                    }
+
+                    showStatus("Applying correction...", false);
+
+                    try {
+                        const response = await fetch('/update_stock', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                id: itemId, 
+                                packs: packsToCorrect, // Can be zero or negative
+                                mrp: newMrp 
+                            })
+                        });
+                        const result = await response.json();
+
+                        if (response.ok) {
+                            showStatus(result.message, false);
+                            
+                            const currentUnitCell = row.querySelector('.stock-cell');
+                            const currentUnit = row.dataset.packUnit || 'ml';
+                            
+                            currentUnitCell.textContent = `${result.stock.toFixed(2)} ${currentUnit}`;
+                            
+                            if (result.mrp !== null) {
+                                mrpInput.value = result.mrp;
+                            }
+                            packsInput.value = 0; // Clear the packs input
+                        } else {
+                            showStatus(`Error: ${result.message}`, true);
+                        }
+                    } catch (error) {
+                        showStatus('An unexpected error occurred.', true);
+                    }
+                });
+            });
+        }
+        
+        // --- View Stock Updates Functionality (MODIFIED) ---
+        viewLogBtn.addEventListener('click', () => {
+            const targetDate = logDateInput.value;
+            if (targetDate) {
+                // Redirects to the new detail page
+                window.location.href = `/stock_batch_detail/${targetDate}`;
+            } else {
+                showStatus("Please select a date to view updates.", true);
+            }
+        });
+
+        // --- NEW: Function to load and display historical dates with updates ---
+        async function loadStockLogDates() {
+            stockLogBody.innerHTML = '<tr><td colspan="3" class="text-center text-info">Loading historical update dates...</td></tr>';
+            try {
+                // Fetch a list of unique dates and total batches added on that date
+                const response = await fetch('/get_stock_batch_dates');
+                const dates = await response.json();
+                
+                stockLogBody.innerHTML = '';
+                
+                if (dates.length === 0) {
+                    stockLogBody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No stock batches logged yet.</td></tr>';
+                    return;
+                }
+
+                dates.forEach(item => {
+                    const row = document.createElement('tr');
+                    const link = `/stock_batch_detail/${item.date_added}`;
+                    
+                    row.innerHTML = `
+                        <td>${item.date_added}</td>
+                        <td>${item.total_batches}</td>
+                        <td><a href="${link}" class="btn btn-sm btn-secondary">View/Edit</a></td>
+                    `;
+                    stockLogBody.appendChild(row);
+                });
+
+            } catch (error) {
+                stockLogBody.innerHTML = '<tr><td colspan="3" class="text-center text-danger">Error loading log history.</td></tr>';
+                console.error("Error fetching stock log history:", error);
+            }
+        }
+        
+        // --- ADDED: Endpoint to fetch batch dates (Needs to be added to app.py) ---
+        // We will add the logic for /get_stock_batch_dates to app.py now.
+
+        // Initial table render
+        document.addEventListener('DOMContentLoaded', () => {
+            renderTable(initialMedicines);
+            loadStockLogDates();
+        });
+    </script>
+</body>
+</html>

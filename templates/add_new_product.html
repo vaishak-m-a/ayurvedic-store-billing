@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add New Product</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+        }
+        .form-grid .form-group {
+            margin-bottom: 0;
+        }
+        .full-width {
+            grid-column: span 2;
+        }
+        .initial-stock-section {
+            padding: 1rem;
+            border: 2px dashed var(--secondary-color);
+            border-radius: 8px;
+            margin-top: 1.5rem;
+            grid-column: span 2;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <h1 class="logo">Billing App</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('billing') }}" class="nav-link">Billing</a>
+                <a href="{{ url_for('sales_report') }}" class="nav-link">Sales Report</a>
+                <a href="{{ url_for('add_stock') }}" class="nav-link active">Stock Management</a>
+                <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
+                <a href="{{ url_for('out_of_stock') }}" class="nav-link">Order Stock</a>
+                <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <h2 class="page-title">Define & Add New Product</h2>
+            <div class="card p-4">
+                <form id="newProductForm">
+                    <div class="form-grid">
+                        <div class="form-group full-width">
+                            <label for="name">Medicine Name</label>
+                            <input type="text" id="name" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="category">Category (e.g., Syrup, Tablet, Oil)</label>
+                            <input type="text" id="category" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="code">Product Code / SKU (Optional)</label>
+                            <input type="text" id="code" class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label for="unit">Pack Unit Name (e.g., Bottle, Strip, Box)</label>
+                            <input type="text" id="unit" class="form-control" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="pack_size_ml">Pack Size (in base units: ml/g/nos)</label>
+                            <input type="number" id="pack_size_ml" class="form-control" min="0.01" step="0.01" required placeholder="e.g., 100 (for 100ml)">
+                        </div>
+                        <div class="form-group">
+                            <label for="mrp">MRP (Selling Price per Pack - ₹)</label>
+                            <input type="number" id="mrp" class="form-control" min="0.01" step="0.01" required>
+                        </div>
+                    </div>
+                    
+                    <div class="initial-stock-section">
+                        <h4>Initial Stock (Required)</h4>
+                        <div class="form-group">
+                            <label for="packs_added">Initial Stock Quantity (in Packs)</label>
+                            <input type="number" id="packs_added" class="form-control" min="1" step="1" required value="1">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary mt-4 full-width">Save Product & Initial Stock</button>
+                    <p id="statusMessage" class="mt-3"></p>
+                </form>
+            </div>
+            
+            <a href="{{ url_for('add_date_stock') }}" class="btn btn-secondary mt-3">Go to Add Stock Batch for Existing Products</a>
+        </div>
+
+        <footer class="main-footer">
+            <p>&copy; 2025 Billing Software</p>
+        </footer>
+    </div>
+    
+    <script>
+        document.getElementById('newProductForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = 'Saving product...';
+            statusMessage.style.color = 'blue';
+
+            const data = {
+                category: document.getElementById('category').value,
+                name: document.getElementById('name').value,
+                code: document.getElementById('code').value,
+                unit: document.getElementById('unit').value,
+                mrp: parseFloat(document.getElementById('mrp').value),
+                packs_added: parseFloat(document.getElementById('packs_added').value),
+                pack_size_ml: parseFloat(document.getElementById('pack_size_ml').value)
+            };
+            
+            // Simple validation
+            if (!data.name || isNaN(data.mrp) || data.mrp <= 0 || isNaN(data.packs_added) || data.packs_added <= 0 || isNaN(data.pack_size_ml) || data.pack_size_ml <= 0) {
+                 statusMessage.textContent = 'Please check all required fields (Name, MRP, Pack Size, Initial Stock).';
+                 statusMessage.style.color = 'red';
+                 return;
+            }
+
+            try {
+                const response = await fetch('/add_new_product', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    statusMessage.textContent = result.message;
+                    statusMessage.style.color = 'green';
+                    // Clear the form for the next entry
+                    document.getElementById('newProductForm').reset();
+                } else {
+                    statusMessage.textContent = `Error: ${result.message}`;
+                    statusMessage.style.color = 'red';
+                }
+            } catch (error) {
+                statusMessage.textContent = 'Network error occurred.';
+                statusMessage.style.color = 'red';
+            }
+        });
+    </script>
+</body>
+</html>
