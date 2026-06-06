@@ -1644,8 +1644,10 @@ def return_medicine():
 
 
 # -------------------- Run --------------------
+# Ensure tables and default admin user are created on startup (runs under Gunicorn and local development)
+create_user_table()
+add_admin_user()
+create_app_tables()
+
 if __name__ == '__main__':
-    create_user_table()
-    add_admin_user()
-    create_app_tables()
     app.run(debug=True)
