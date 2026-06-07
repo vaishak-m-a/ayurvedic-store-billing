@@ -376,6 +376,23 @@ def create_app_tables():
             FOREIGN KEY (medicine_id) REFERENCES medicines(id)
         )
         """)
+    
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS daily_balances (
+        date TEXT PRIMARY KEY,
+        opening_balance REAL NOT NULL,
+        cash_sales REAL NOT NULL,
+        credit_collections REAL NOT NULL,
+        bank_withdrawals REAL NOT NULL,
+        bank_deposits REAL NOT NULL,
+        returns REAL NOT NULL,
+        expenses REAL NOT NULL,
+        closing_balance REAL NOT NULL,
+        actual_cash REAL NOT NULL,
+        difference REAL NOT NULL,
+        notes TEXT
+    )
+    """)
 
     cur.execute("CREATE INDEX IF NOT EXISTS idx_medicines_name ON medicines(name)")
     cur.execute("CREATE INDEX IF NOT EXISTS ux_medicines_code ON medicines(code)")
@@ -890,14 +907,25 @@ def search_medicine():
     query = request.args.get('query', '').strip()
     conn = get_db_connection()
 
-    rows = conn.execute("""
-        SELECT id, name, unit, mrp, loose_unit, loose_mrp, loose_basic_price, 
-               pack_size_ml, loose_size_ml, stock, code
-        FROM medicines
-        WHERE name LIKE ? OR code LIKE ?
-        ORDER BY name
-        LIMIT 30
-    """, (f'%{query}%', f'%{query}%')).fetchall()
+    terms = query.split()
+    if not terms:
+        rows = []
+    else:
+        sql = """
+            SELECT id, name, unit, mrp, loose_unit, loose_mrp, loose_basic_price, 
+                   pack_size_ml, loose_size_ml, stock, code, category
+            FROM medicines
+            WHERE 
+        """
+        conditions = []
+        params = []
+        for term in terms:
+            conditions.append("(name LIKE ? OR code LIKE ? OR category LIKE ?)")
+            term_pattern = f"%{term}%"
+            params.extend([term_pattern, term_pattern, term_pattern])
+        sql += " AND ".join(conditions)
+        sql += " ORDER BY name LIMIT 50"
+        rows = conn.execute(sql, params).fetchall()
 
     processed_rows = []
     for row in rows:
@@ -935,10 +963,10 @@ def generate_bill_logic(data):
         payment_method = data.get('payment_method', 'Cash')
         discount = data.get('discount', 0.0)
         tax = data.get('tax', 0.0)
-        customer_name = data.get('customer_name', '')
-        doctor_name = data.get('doctor_name', '')
-        customer_phone = data.get('customer_phone', '')
-        customer_address = data.get('customer_address', '')
+        customer_name = data.get('customer_name') or ''
+        doctor_name = data.get('doctor_name') or ''
+        customer_phone = data.get('customer_phone') or ''
+        customer_address = data.get('customer_address') or ''
 
         if not items:
             return jsonify({'message': 'No items in bill.'}), 400
@@ -1348,22 +1376,29 @@ def search_stock():
 def sales_report():
     """
     Enhanced sales report:
-      - totals by payment method (for a date param or today)
+      - totals by payment method (for a date range or today)
       - aggregated medicine sales (name, qty sold, total sales, split by payment method)
     """
     today_default = datetime.now().strftime('%Y-%m-%d')
-    date = request.args.get('date') or today_default
+    start_date = request.args.get('start_date') or request.args.get('date') or today_default
+    end_date = request.args.get('end_date') or request.args.get('date') or today_default
     conn = get_db_connection()
 
     # totals
-    # Query remains the same, but now SUM(total) includes negative return transactions
-    totals_rows = conn.execute("SELECT payment_method, SUM(total) as sum_total FROM sales WHERE date = ? GROUP BY payment_method", (date,)).fetchall()
+    # Query for date range: s.date BETWEEN ? AND ?
+    totals_rows = conn.execute("""
+        SELECT payment_method, SUM(total) as sum_total 
+        FROM sales 
+        WHERE date BETWEEN ? AND ? 
+        GROUP BY payment_method
+    """, (start_date, end_date)).fetchall()
+    
     totals = {r['payment_method']: r['sum_total'] for r in totals_rows}
     cash_total = totals.get('Cash', 0.0) or totals.get('cash', 0.0) or 0.0
     gpay_total = totals.get('GPay', 0.0) or totals.get('gpay', 0.0) or 0.0
     grand_total = cash_total + gpay_total
 
-    # aggregated medicine sales for that date
+    # aggregated medicine sales for that date range
     meds = conn.execute("""
         SELECT si.medicine_id, si.name, si.unit_price,
                 SUM(si.quantity) as qty_sold,
@@ -1372,17 +1407,22 @@ def sales_report():
                 SUM(CASE WHEN s.payment_method = 'GPay' THEN si.line_total ELSE 0 END) as gpay_amount
         FROM sale_items si
         JOIN sales s ON s.id = si.sale_id
-        WHERE s.date = ?
+        WHERE s.date BETWEEN ? AND ?
         GROUP BY si.medicine_id, si.name, si.unit_price
         ORDER BY qty_sold DESC
-    """, (date,)).fetchall()
+    """, (start_date, end_date)).fetchall()
 
-    # fetch all bills for the day
-    all_bills = conn.execute("SELECT id, total, payment_method FROM sales WHERE date = ? ORDER BY id DESC", (date,)).fetchall()
+    # fetch all bills for the date range
+    all_bills = conn.execute("""
+        SELECT id, total, payment_method, customer_name, date 
+        FROM sales 
+        WHERE date BETWEEN ? AND ? 
+        ORDER BY date DESC, id DESC
+    """, (start_date, end_date)).fetchall()
 
-    total_bills = conn.execute("SELECT COUNT(*) as cnt FROM sales WHERE date = ?", (date,)).fetchone()['cnt'] or 0
+    total_bills = conn.execute("SELECT COUNT(*) as cnt FROM sales WHERE date BETWEEN ? AND ?", (start_date, end_date)).fetchone()['cnt'] or 0
 
-    avg_order = conn.execute("SELECT AVG(total) as avg_total FROM sales WHERE date = ?", (date,)).fetchone()['avg_total'] or 0.0
+    avg_order = conn.execute("SELECT AVG(total) as avg_total FROM sales WHERE date BETWEEN ? AND ?", (start_date, end_date)).fetchone()['avg_total'] or 0.0
     
     top_item = None
     if meds:
@@ -1394,7 +1434,8 @@ def sales_report():
                            gpay_total=gpay_total,
                            grand_total=grand_total,
                            medicine_sales=meds,
-                           selected_date=date,
+                           start_date=start_date,
+                           end_date=end_date,
                            total_bills=total_bills,
                            avg_order_value=avg_order,
                            top_item=top_item,
@@ -1638,9 +1679,120 @@ def return_medicine():
             conn.rollback()
         print(f"Error processing return: {e}")
         return jsonify({'message': 'An error occurred during stock return.', 'error': str(e)}), 500
+@app.route('/daily_balance')
+@login_required
+def daily_balance():
+    conn = get_db_connection()
+    # Fetch historical daily balances
+    history = conn.execute("SELECT * FROM daily_balances ORDER BY date DESC LIMIT 30").fetchall()
+    conn.close()
+    return render_template('daily_balance.html', history=history)
+
+@app.route('/get_daily_balance_data')
+@login_required
+def get_daily_balance_data():
+    date = request.args.get('date')
+    if not date:
+        return jsonify({'message': 'Date is required.'}), 400
+        
+    conn = get_db_connection()
+    
+    # 1. Fetch saved record if exists
+    saved = conn.execute("SELECT * FROM daily_balances WHERE date = ?", (date,)).fetchone()
+    
+    # 2. Fetch live metrics
+    cash_sales = conn.execute("SELECT SUM(total) FROM sales WHERE date = ? AND payment_method = 'Cash' AND total > 0", (date,)).fetchone()[0] or 0.0
+    gpay_sales = conn.execute("SELECT SUM(total) FROM sales WHERE date = ? AND payment_method = 'GPay' AND total > 0", (date,)).fetchone()[0] or 0.0
+    returns = abs(conn.execute("SELECT SUM(total) FROM sales WHERE date = ? AND payment_method = 'Cash' AND total < 0", (date,)).fetchone()[0] or 0.0)
+    expenses = conn.execute("SELECT SUM(amount) FROM finance_log WHERE date = ? AND type = 'expense'", (date,)).fetchone()[0] or 0.0
+    bank_withdrawals = conn.execute("SELECT SUM(amount) FROM bank_log WHERE date = ? AND amount > 0", (date,)).fetchone()[0] or 0.0
+    bank_deposits = abs(conn.execute("SELECT SUM(amount) FROM bank_log WHERE date = ? AND amount < 0", (date,)).fetchone()[0] or 0.0)
+    credit_collections = conn.execute("SELECT SUM(amount) FROM finance_log WHERE date = ? AND type = 'collection'", (date,)).fetchone()[0] or 0.0
+
+    # 3. Determine opening balance
+    if saved:
+        opening_balance = saved['opening_balance']
+        actual_cash = saved['actual_cash']
+        notes = saved['notes']
+        is_saved = True
+    else:
+        # Get from previous day's saved closing
+        prev_record = conn.execute("SELECT actual_cash FROM daily_balances WHERE date < ? ORDER BY date DESC LIMIT 1", (date,)).fetchone()
+        opening_balance = prev_record['actual_cash'] if prev_record else 0.0
+        actual_cash = 0.0
+        notes = ""
+        is_saved = False
+        
+    conn.close()
+    
+    return jsonify({
+        'date': date,
+        'opening_balance': opening_balance,
+        'cash_sales': cash_sales,
+        'gpay_sales': gpay_sales,
+        'returns': returns,
+        'expenses': expenses,
+        'bank_withdrawals': bank_withdrawals,
+        'bank_deposits': bank_deposits,
+        'credit_collections': credit_collections,
+        'actual_cash': actual_cash,
+        'notes': notes,
+        'is_saved': is_saved
+    })
+
+@app.route('/save_daily_balance', methods=['POST'])
+@login_required
+def save_daily_balance():
+    data = request.get_json(force=True)
+    date = data.get('date')
+    opening = float(data.get('opening_balance') or 0.0)
+    cash_sales = float(data.get('cash_sales') or 0.0)
+    credit_collections = float(data.get('credit_collections') or 0.0)
+    bank_withdrawals = float(data.get('bank_withdrawals') or 0.0)
+    bank_deposits = float(data.get('bank_deposits') or 0.0)
+    returns = float(data.get('returns') or 0.0)
+    expenses = float(data.get('expenses') or 0.0)
+    closing = float(data.get('closing_balance') or 0.0)
+    actual_cash = float(data.get('actual_cash') or 0.0)
+    difference = float(data.get('difference') or 0.0)
+    notes = data.get('notes', '')
+    
+    if not date:
+        return jsonify({'message': 'Date is required.'}), 400
+        
+    conn = get_db_connection()
+    try:
+        if isinstance(conn, PostgresConnectionWrapper):
+            conn.execute("""
+                INSERT INTO daily_balances 
+                (date, opening_balance, cash_sales, credit_collections, bank_withdrawals, bank_deposits, returns, expenses, closing_balance, actual_cash, difference, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (date) DO UPDATE SET
+                    opening_balance = EXCLUDED.opening_balance,
+                    cash_sales = EXCLUDED.cash_sales,
+                    credit_collections = EXCLUDED.credit_collections,
+                    bank_withdrawals = EXCLUDED.bank_withdrawals,
+                    bank_deposits = EXCLUDED.bank_deposits,
+                    returns = EXCLUDED.returns,
+                    expenses = EXCLUDED.expenses,
+                    closing_balance = EXCLUDED.closing_balance,
+                    actual_cash = EXCLUDED.actual_cash,
+                    difference = EXCLUDED.difference,
+                    notes = EXCLUDED.notes
+            """, (date, opening, cash_sales, credit_collections, bank_withdrawals, bank_deposits, returns, expenses, closing, actual_cash, difference, notes))
+        else:
+            conn.execute("""
+                INSERT OR REPLACE INTO daily_balances 
+                (date, opening_balance, cash_sales, credit_collections, bank_withdrawals, bank_deposits, returns, expenses, closing_balance, actual_cash, difference, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (date, opening, cash_sales, credit_collections, bank_withdrawals, bank_deposits, returns, expenses, closing, actual_cash, difference, notes))
+        conn.commit()
+        return jsonify({'message': 'Daily balance reconciliation saved successfully.'}), 200
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'message': f'Database error: {str(e)}'}), 500
     finally:
-        if conn:
-            conn.close()
+        conn.close()
 
 
 # -------------------- Run --------------------

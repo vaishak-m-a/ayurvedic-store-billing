@@ -395,17 +395,7 @@ async function saveAndProcessBill(shouldPrint) {
     document.getElementById('bill-doctor-name').textContent = doctorName;
     document.getElementById('bill-customer-phone').textContent = customerPhone;
 
-    // 2. Prepare print action (only opens dialog, does not clear state yet)
-    if (shouldPrint) {
-        isPrinting = true;
-        // Open the print dialog immediately
-        setTimeout(() => {
-            window.print();
-            isPrinting = false;
-        }, 200);
-    }
-
-    // 3. Prepare data for backend
+    // 2. Prepare data for backend
     const itemsForBackend = Object.values(billItems).map(it => ({
         id: it.id,
         name: it.name,
@@ -427,7 +417,7 @@ async function saveAndProcessBill(shouldPrint) {
         customer_address: customerAddress
     };
 
-    // 4. Send data to backend
+    // 3. Send data to backend
     try {
         const resp = await fetch('/generate_bill', {
             method: 'POST',
@@ -437,13 +427,21 @@ async function saveAndProcessBill(shouldPrint) {
         const result = await resp.json();
 
         if (resp.ok) {
+            // Update printed bill number with the real DB bill ID
+            document.getElementById('bill-no').textContent = result.bill_id;
+
             statusMessage.textContent = result.message || 'Bill generated.';
             statusMessage.style.color = 'green';
 
-            // If it's a regular save, clear everything immediately and REDIRECT
-            if (!shouldPrint) {
+            if (shouldPrint) {
+                isPrinting = true;
+                // Open the print dialog now that the bill ID is set in DOM
+                setTimeout(() => {
+                    window.print();
+                    isPrinting = false;
+                }, 250);
+            } else {
                 resetBillUI();
-                // FIX: Use the global variable defined in billing.html
                 window.location.href = DASHBOARD_URL; 
             }
 

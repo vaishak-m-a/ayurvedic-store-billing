@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Balance Reconciliation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .balance-container {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 2rem;
+            margin-top: 1.5rem;
+        }
+
+        .reconciliation-form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .metric-row:last-child {
+            border-bottom: none;
+        }
+
+        .metric-label {
+            font-weight: 500;
+            color: var(--primary-text);
+        }
+
+        .metric-value {
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .expected-row {
+            background-color: var(--light-color);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-top: 0.5rem;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .discrepancy-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+
+        .badge-match {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .badge-shortage {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .badge-excess {
+            background-color: #cce5ff;
+            color: #004085;
+            border: 1px solid #b8daff;
+        }
+
+        .history-section {
+            margin-top: 3rem;
+        }
+
+        .status-pill {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        .status-saved {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+
+        .history-table th, .history-table td {
+            text-align: right;
+        }
+
+        .history-table th:first-child, .history-table td:first-child,
+        .history-table th:last-child, .history-table td:last-child {
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="main-header">
+            <h1 class="logo">Billing App</h1>
+            <nav class="main-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+                <a href="{{ url_for('billing') }}" class="nav-link">Billing</a>
+                <a href="{{ url_for('sales_report') }}" class="nav-link">Sales Report</a>
+                <a href="{{ url_for('add_stock') }}" class="nav-link">Stock Management</a>
+                <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
+                <a href="{{ url_for('out_of_stock') }}" class="nav-link">Order Stock</a>
+                <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('daily_balance') }}" class="nav-link active">Daily Balance</a>
+                <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
+            </nav>
+        </header>
+
+        <div class="main-content">
+            <h2 class="page-title">Daily Cash Reconciliation</h2>
+
+            <div class="card p-3 mb-4" style="max-width: 400px;">
+                <div class="form-group" style="margin-bottom: 0; display: flex; align-items: center; gap: 1rem;">
+                    <label for="recon-date" style="margin-bottom: 0; font-weight: bold; white-space: nowrap;">Reconciliation Date:</label>
+                    <input type="date" id="recon-date" class="form-control">
+                </div>
+            </div>
+
+            <div class="balance-container">
+                <!-- Worksheet Column -->
+                <div class="card p-4">
+                    <h3>Cash Flow Reconciliation Worksheet</h3>
+                    <div id="reconciled-status" class="mb-3" style="display: none;">
+                        <span class="status-pill status-saved">✓ Reconciled & Saved</span>
+                    </div>
+                    
+                    <form id="reconciliationForm" class="reconciliation-form">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="opening-balance">Opening Balance (Cash in Hand) (₹)</label>
+                                <input type="number" id="opening-balance" class="form-control" step="0.01" min="0">
+                                <small class="text-muted">Inherited from previous day's reconciled closing cash</small>
+                            </div>
+                        </div>
+
+                        <div class="card p-3" style="background-color: rgba(0,0,0,0.02); border: 1px solid #ddd;">
+                            <h4 style="margin-top: 0; margin-bottom: 1rem; border-bottom: 1px solid #ccc; padding-bottom: 0.5rem; color: var(--primary-color);">Daily Cash Inflows/Outflows</h4>
+                            
+                            <div class="metric-row">
+                                <span class="metric-label">(+) Today's Cash Sales</span>
+                                <span class="metric-value text-success" id="val-cash-sales">₹0.00</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">(+) Bank Withdrawals (Cash into hand)</span>
+                                <span class="metric-value text-success" id="val-bank-withdrawals">₹0.00</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">(-) Returns/Refunds Paid in Cash</span>
+                                <span class="metric-value text-danger" id="val-returns">₹0.00</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">(-) Other Business Expenses (Cash)</span>
+                                <span class="metric-value text-danger" id="val-expenses">₹0.00</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">(-) Bank Deposits (Cash out of hand)</span>
+                                <span class="metric-value text-danger" id="val-bank-deposits">₹0.00</span>
+                            </div>
+                        </div>
+
+                        <div class="metric-row expected-row">
+                            <span class="metric-label" style="font-size: 1.1rem;">Expected Closing Cash (in hand)</span>
+                            <span class="metric-value" style="font-size: 1.3rem; color: var(--primary-color);" id="val-expected-closing">₹0.00</span>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="actual-cash" style="font-size: 1.1rem; font-weight: bold;">Actual Closing Cash (Counted Cash) (₹)</label>
+                            <input type="number" id="actual-cash" class="form-control" step="0.01" min="0" required placeholder="Enter counted cash in hand">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Reconciliation Discrepancy</label>
+                            <div id="discrepancy-badge" class="discrepancy-badge badge-match">Balanced</div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="recon-notes">Notes / Observations</label>
+                            <textarea id="recon-notes" class="form-control" rows="3" placeholder="Explain any shortage or excess..."></textarea>
+                        </div>
+
+                        <button type="submit" class="btn btn-success" style="padding: 12px; font-size: 1.1rem;">Save Reconciliation</button>
+                        <p id="submitStatus" style="font-weight: bold; margin-top: 0.5rem;"></p>
+                    </form>
+                </div>
+
+                <!-- Summary Column -->
+                <div class="flex-column" style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div class="card p-4">
+                        <h3>Non-Cash/Credit Context</h3>
+                        <p class="text-muted">These are tracked for visual context and are not added to Cash reconciliation.</p>
+                        
+                        <div class="metric-row">
+                            <span class="metric-label">GPay Sales (Digital)</span>
+                            <span class="metric-value" style="color: #6f42c1;" id="val-gpay-sales">₹0.00</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Credit Collections (Invoiced Cash/GPay)</span>
+                            <span class="metric-value text-info" id="val-credit-collections">₹0.00</span>
+                        </div>
+                    </div>
+                    
+                    <div class="card p-4">
+                        <h3>Reconciliation Steps</h3>
+                        <ol style="padding-left: 1.25rem; margin-top: 0.5rem; line-height: 1.6;">
+                            <li>Count all cash notes in the drawer at the end of the day.</li>
+                            <li>Type the count into the <strong>Actual Closing Cash</strong> field.</li>
+                            <li>Verify the calculated <strong>Reconciliation Discrepancy</strong>.</li>
+                            <li>If there's a difference, detail the reason in the <strong>Notes</strong>.</li>
+                            <li>Click <strong>Save Reconciliation</strong> to lock in the sheet.</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Historical Log -->
+            <div class="history-section card p-4">
+                <h3>Historical Reconciliation Log (Last 30 Records)</h3>
+                <div class="table-responsive">
+                    <table class="table table-striped history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Opening Cash (₹)</th>
+                                <th>Cash Sales (₹)</th>
+                                <th>Bank In/Out (₹)</th>
+                                <th>Expenses/Returns (₹)</th>
+                                <th>Expected Closing (₹)</th>
+                                <th>Actual Counted (₹)</th>
+                                <th>Discrepancy (₹)</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in history %}
+                            <tr>
+                                <td><strong>{{ record.date }}</strong></td>
+                                <td>{{ '%.2f'|format(record.opening_balance) }}</td>
+                                <td>{{ '%.2f'|format(record.cash_sales) }}</td>
+                                <td>
+                                    {% set bank_net = record.bank_withdrawals - record.bank_deposits %}
+                                    <span class="{% if bank_net > 0 %}text-success{% elif bank_net < 0 %}text-danger{% endif %}">
+                                        {{ '+' if bank_net > 0 else '' }}{{ '%.2f'|format(bank_net) }}
+                                    </span>
+                                </td>
+                                <td>{{ '%.2f'|format(record.expenses + record.returns) }}</td>
+                                <td>{{ '%.2f'|format(record.closing_balance) }}</td>
+                                <td><strong>{{ '%.2f'|format(record.actual_cash) }}</strong></td>
+                                <td>
+                                    {% if record.difference == 0 %}
+                                        <span class="status-pill status-saved">Balanced</span>
+                                    {% elif record.difference < 0 %}
+                                        <span class="status-pill" style="background-color: #f8d7da; color: #721c24;">Shortage ({{ '%.2f'|format(record.difference) }})</span>
+                                    {% else %}
+                                        <span class="status-pill" style="background-color: #cce5ff; color: #004085;">Excess (+{{ '%.2f'|format(record.difference) }})</span>
+                                    {% endif %}
+                                </td>
+                                <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ record.notes or '-' }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="9" style="text-align: center;">No reconciliation history saved yet.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <footer class="main-footer">
+            <p>&copy; 2025 Billing Software</p>
+        </footer>
+    </div>
+
+    <script>
+        // Store computed values for submission
+        let currentMetrics = {};
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set date to today's date initially
+            const todayStr = new Date().toISOString().split('T')[0];
+            const dateInput = document.getElementById('recon-date');
+            dateInput.value = todayStr;
+            dateInput.max = todayStr; // Prevent choosing future dates
+
+            // Initial fetch
+            fetchReconciliationData(todayStr);
+
+            // Listen for date changes
+            dateInput.addEventListener('change', (e) => {
+                fetchReconciliationData(e.target.value);
+            });
+
+            // Listen for changes in opening balance and actual cash
+            document.getElementById('opening-balance').addEventListener('input', calculateExpectedAndDiscrepancy);
+            document.getElementById('actual-cash').addEventListener('input', calculateExpectedAndDiscrepancy);
+
+            // Submit form
+            document.getElementById('reconciliationForm').addEventListener('submit', saveReconciliation);
+        });
+
+        async function fetchReconciliationData(date) {
+            const submitStatus = document.getElementById('submitStatus');
+            submitStatus.textContent = '';
+            
+            try {
+                const response = await fetch(`/get_daily_balance_data?date=${date}`);
+                if (!response.ok) throw new Error('Failed to load metrics');
+                
+                const data = await response.json();
+                currentMetrics = data;
+
+                // Populate live values
+                document.getElementById('val-cash-sales').textContent = '₹' + data.cash_sales.toFixed(2);
+                document.getElementById('val-bank-withdrawals').textContent = '₹' + data.bank_withdrawals.toFixed(2);
+                document.getElementById('val-returns').textContent = '₹' + data.returns.toFixed(2);
+                document.getElementById('val-expenses').textContent = '₹' + data.expenses.toFixed(2);
+                document.getElementById('val-bank-deposits').textContent = '₹' + data.bank_deposits.toFixed(2);
+                document.getElementById('val-gpay-sales').textContent = '₹' + data.gpay_sales.toFixed(2);
+                document.getElementById('val-credit-collections').textContent = '₹' + data.credit_collections.toFixed(2);
+
+                // Set inputs
+                document.getElementById('opening-balance').value = data.opening_balance.toFixed(2);
+                document.getElementById('actual-cash').value = data.is_saved ? data.actual_cash.toFixed(2) : '';
+                document.getElementById('recon-notes').value = data.notes || '';
+
+                // Show/hide saved pill
+                document.getElementById('reconciled-status').style.display = data.is_saved ? 'block' : 'none';
+
+                calculateExpectedAndDiscrepancy();
+            } catch (err) {
+                console.error(err);
+                alert('Error loading reconciliation data for ' + date);
+            }
+        }
+
+        function calculateExpectedAndDiscrepancy() {
+            const opening = parseFloat(document.getElementById('opening-balance').value) || 0;
+            const actual = parseFloat(document.getElementById('actual-cash').value) || 0;
+
+            const cashSales = currentMetrics.cash_sales || 0;
+            const withdrawals = currentMetrics.bank_withdrawals || 0;
+            const returns = currentMetrics.returns || 0;
+            const expenses = currentMetrics.expenses || 0;
+            const deposits = currentMetrics.bank_deposits || 0;
+
+            // Compute expected closing cash
+            const expected = opening + cashSales + withdrawals - returns - expenses - deposits;
+            document.getElementById('val-expected-closing').textContent = '₹' + expected.toFixed(2);
+            currentMetrics.expected_closing = expected;
+
+            // Calculate discrepancy
+            const difference = actual - expected;
+            currentMetrics.difference = difference;
+
+            // Display discrepancy badge
+            const badge = document.getElementById('discrepancy-badge');
+            badge.className = 'discrepancy-badge'; // Reset class list
+
+            if (Math.abs(difference) < 0.01) {
+                badge.textContent = 'Balanced';
+                badge.classList.add('badge-match');
+            } else if (difference < 0) {
+                badge.textContent = 'Cash Shortage: -₹' + Math.abs(difference).toFixed(2);
+                badge.classList.add('badge-shortage');
+            } else {
+                badge.textContent = 'Cash Excess: +₹' + difference.toFixed(2);
+                badge.classList.add('badge-excess');
+            }
+        }
+
+        async function saveReconciliation(e) {
+            e.preventDefault();
+            const submitStatus = document.getElementById('submitStatus');
+            submitStatus.textContent = 'Saving...';
+            submitStatus.style.color = 'blue';
+
+            const payload = {
+                date: document.getElementById('recon-date').value,
+                opening_balance: parseFloat(document.getElementById('opening-balance').value) || 0,
+                cash_sales: currentMetrics.cash_sales || 0,
+                credit_collections: currentMetrics.credit_collections || 0,
+                bank_withdrawals: currentMetrics.bank_withdrawals || 0,
+                bank_deposits: currentMetrics.bank_deposits || 0,
+                returns: currentMetrics.returns || 0,
+                expenses: currentMetrics.expenses || 0,
+                closing_balance: currentMetrics.expected_closing || 0,
+                actual_cash: parseFloat(document.getElementById('actual-cash').value) || 0,
+                difference: currentMetrics.difference || 0,
+                notes: document.getElementById('recon-notes').value.trim()
+            };
+
+            try {
+                const response = await fetch('/save_daily_balance', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    submitStatus.textContent = result.message;
+                    submitStatus.style.color = 'green';
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    submitStatus.textContent = 'Error: ' + result.message;
+                    submitStatus.style.color = 'red';
+                }
+            } catch (err) {
+                submitStatus.textContent = 'Network error saving reconciliation.';
+                submitStatus.style.color = 'red';
+            }
+        }
+    </script>
+</body>
+</html>

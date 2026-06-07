@@ -149,6 +149,7 @@
                 <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
                 <a href="{{ url_for('out_of_stock') }}" class="nav-link">Order Stock</a>
                 <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('daily_balance') }}" class="nav-link">Daily Balance</a>
                 <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
             </nav>
         </header>
@@ -267,9 +268,24 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById("bill-date").innerText = new Date().toLocaleDateString();
-            const randomBillNo = Math.floor(Math.random() * 9000) + 1000;
-            document.getElementById("bill-no").innerText = randomBillNo;
+            const originalBillData = {{ (original_bill_data | tojson | safe) if original_bill_data is defined and original_bill_data is not none else 'null' }};
+            if (originalBillData) {
+                document.getElementById("bill-date").innerText = originalBillData.date;
+                document.getElementById("bill-no").innerText = originalBillData.id;
+                document.getElementById("customer-name").value = originalBillData.customer_name || '';
+                document.getElementById("doctor-name").value = originalBillData.doctor_name || '';
+                document.getElementById("customer-phone").value = originalBillData.customer_phone || '';
+                document.getElementById("customer-address").value = originalBillData.customer_address || '';
+                document.getElementById("discount").value = originalBillData.discount_percentage || 0;
+                
+                document.getElementById("bill-customer-name").innerText = originalBillData.customer_name || '';
+                document.getElementById("bill-doctor-name").innerText = originalBillData.doctor_name || '';
+                document.getElementById("bill-customer-phone").innerText = originalBillData.customer_phone || '';
+            } else {
+                document.getElementById("bill-date").innerText = new Date().toLocaleDateString();
+                document.getElementById("bill-no").innerText = "Draft (Auto-Assigned)";
+            }
+
             const editBillItems = {{ (edit_bill_items | tojson | safe) if edit_bill_items is defined else '[]' }};
 
             if (editBillItems && editBillItems.length > 0) {

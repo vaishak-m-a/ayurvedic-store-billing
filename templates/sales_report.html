@@ -37,26 +37,35 @@
                 <a href="{{ url_for('return_stock') }}" class="nav-link">Return Stock</a>
                 <a href="{{ url_for('out_of_stock') }}" class="nav-link">Order Stock</a>
                 <a href="{{ url_for('finance_log') }}" class="nav-link">Finance Log</a>
+                <a href="{{ url_for('daily_balance') }}" class="nav-link">Daily Balance</a>
                 <a href="{{ url_for('logout') }}" class="nav-link logout-btn">Logout</a>
             </nav>
         </header>
         
         <div class="main-content sales-report-content">
-            <h2 class="page-title">Sales Report ({{ selected_date|default("Today") }})</h2>
+            <h2 class="page-title">Sales Report ({{ start_date }}{% if start_date != end_date %} to {{ end_date }}{% endif %})</h2>
             
-            <form method="get" class="date-filter">
-                <label for="date">Select Date:</label>
-                <input type="date" id="date" name="date" value="{{ selected_date }}">
-                <button type="submit" class="btn btn-primary">View</button>
+            <form method="get" class="date-filter card p-3 no-print" style="display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; background: rgba(255,255,255,0.7); backdrop-filter: blur(10px); border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 30px rgba(0,0,0,0.05);">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="start_date" style="font-weight: 600; margin-right: 0.5rem;">Start Date:</label>
+                    <input type="date" id="start_date" name="start_date" class="form-control" value="{{ start_date }}" style="display: inline-block; width: auto;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label for="end_date" style="font-weight: 600; margin-right: 0.5rem;">End Date:</label>
+                    <input type="date" id="end_date" name="end_date" class="form-control" value="{{ end_date }}" style="display: inline-block; width: auto;">
+                </div>
+                <button type="submit" class="btn btn-primary" style="padding: 10px 24px; border-radius: 8px;">View Report</button>
             </form>
 
             <div class="report-section card p-4 mt-4">
-                <h3>All Bills for the Day</h3>
+                <h3>All Bills for the Period</h3>
                 {% if all_bills %}
                     <table class="table table-striped">
                         <thead>
                             <tr>
+                                <th>Date</th>
                                 <th>Bill ID</th>
+                                <th>Customer Name</th>
                                 <th>Total (₹)</th>
                                 <th>Payment Method</th>
                                 <th>Actions</th>
@@ -65,7 +74,9 @@
                         <tbody>
                             {% for bill in all_bills %}
                                 <tr id="bill-row-{{ bill.id }}">
+                                    <td>{{ bill.date }}</td>
                                     <td>{{ bill.id }}</td>
+                                    <td>{{ bill.customer_name|default("-", true) }}</td>
                                     <td>{{ '%.2f'|format(bill.total) }}</td>
                                     <td>{{ bill.payment_method }}</td>
                                     <td>
@@ -77,7 +88,7 @@
                         </tbody>
                     </table>
                 {% else %}
-                    <p>No bills recorded for this date.</p>
+                    <p>No bills recorded for this period.</p>
                 {% endif %}
             </div>
 
