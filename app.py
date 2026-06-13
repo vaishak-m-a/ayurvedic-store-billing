@@ -448,7 +448,7 @@ def dashboard():
     # 3. Calculate Yesterday's totals
     totals_yesterday = {r['payment_method']: r['sum_total'] for r in totals_rows_yesterday}
     yesterday_cash_total = totals_yesterday.get('Cash', 0.0) or totals_yesterday.get('cash', 0.0) or 0.0
-    yesterday_gpay_total = totals_yesterday.get('GPay', 0.0) or totals_yesterday.get('gpay', 0.0) or 0.0
+    yesterday_gpay_total = (totals_yesterday.get('GPay', 0.0) or 0.0) + (totals_yesterday.get('gpay', 0.0) or 0.0) + (totals_yesterday.get('UPI', 0.0) or 0.0) + (totals_yesterday.get('upi', 0.0) or 0.0)
     yesterday_total = yesterday_cash_total + yesterday_gpay_total
 
     # 4. Fetch Finance Log entries for today (for reconciliation)
@@ -553,7 +553,7 @@ def dashboard():
     # Calculate Today's display totals
     totals_today = {r['payment_method']: r['sum_total'] for r in totals_rows_today}
     cash_total = totals_today.get('Cash', 0.0) or totals_today.get('cash', 0.0) or 0.0
-    gpay_total = totals_today.get('GPay', 0.0) or totals_today.get('gpay', 0.0) or 0.0
+    gpay_total = (totals_today.get('GPay', 0.0) or 0.0) + (totals_today.get('gpay', 0.0) or 0.0) + (totals_today.get('UPI', 0.0) or 0.0) + (totals_today.get('upi', 0.0) or 0.0)
     grand_total = cash_total + gpay_total
 
     return render_template("dashboard.html",
@@ -952,6 +952,32 @@ def search_medicine():
 
     conn.close()
     return jsonify(processed_rows)
+
+
+@app.route('/get_customer_history')
+@login_required
+def get_customer_history():
+    phone = request.args.get('phone', '').strip()
+    if not phone:
+        return jsonify({'found': False})
+    
+    conn = get_db_connection()
+    row = conn.execute("""
+        SELECT date, total 
+        FROM sales 
+        WHERE customer_phone = ? 
+        ORDER BY id DESC 
+        LIMIT 1
+    """, (phone,)).fetchone()
+    conn.close()
+    
+    if row:
+        return jsonify({
+            'found': True,
+            'date': row['date'],
+            'total': row['total']
+        })
+    return jsonify({'found': False})
 
 
 def generate_bill_logic(data):
@@ -1395,7 +1421,7 @@ def sales_report():
     
     totals = {r['payment_method']: r['sum_total'] for r in totals_rows}
     cash_total = totals.get('Cash', 0.0) or totals.get('cash', 0.0) or 0.0
-    gpay_total = totals.get('GPay', 0.0) or totals.get('gpay', 0.0) or 0.0
+    gpay_total = (totals.get('GPay', 0.0) or 0.0) + (totals.get('gpay', 0.0) or 0.0) + (totals.get('UPI', 0.0) or 0.0) + (totals.get('upi', 0.0) or 0.0)
     grand_total = cash_total + gpay_total
 
     # aggregated medicine sales for that date range
@@ -1404,7 +1430,7 @@ def sales_report():
                 SUM(si.quantity) as qty_sold,
                 SUM(si.line_total) as total_sales,
                 SUM(CASE WHEN s.payment_method = 'Cash' THEN si.line_total ELSE 0 END) as cash_amount,
-                SUM(CASE WHEN s.payment_method = 'GPay' THEN si.line_total ELSE 0 END) as gpay_amount
+                SUM(CASE WHEN s.payment_method IN ('GPay', 'gpay', 'UPI', 'upi') THEN si.line_total ELSE 0 END) as gpay_amount
         FROM sale_items si
         JOIN sales s ON s.id = si.sale_id
         WHERE s.date BETWEEN ? AND ?
@@ -1702,7 +1728,7 @@ def get_daily_balance_data():
     
     # 2. Fetch live metrics
     cash_sales = conn.execute("SELECT SUM(total) FROM sales WHERE date = ? AND payment_method = 'Cash' AND total > 0", (date,)).fetchone()[0] or 0.0
-    gpay_sales = conn.execute("SELECT SUM(total) FROM sales WHERE date = ? AND payment_method = 'GPay' AND total > 0", (date,)).fetchone()[0] or 0.0
+    gpay_sales = conn.execute("SELECT SUM(total) FROM sales WHERE date = ? AND payment_method IN ('GPay', 'gpay', 'UPI', 'upi') AND total > 0", (date,)).fetchone()[0] or 0.0
     returns = abs(conn.execute("SELECT SUM(total) FROM sales WHERE date = ? AND payment_method = 'Cash' AND total < 0", (date,)).fetchone()[0] or 0.0)
     expenses = conn.execute("SELECT SUM(amount) FROM finance_log WHERE date = ? AND type = 'expense'", (date,)).fetchone()[0] or 0.0
     bank_withdrawals = conn.execute("SELECT SUM(amount) FROM bank_log WHERE date = ? AND amount > 0", (date,)).fetchone()[0] or 0.0

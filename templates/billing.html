@@ -171,6 +171,7 @@
                     <div class="form-group">
                         <label for="customer-phone">Phone Number (Optional)</label>
                         <input class="form-control" id="customer-phone" placeholder="Phone Number">
+                        <div id="customer-history-info" class="customer-history-info"></div>
                     </div>
                     <div class="form-group">
                         <label for="customer-address">Address (Optional)</label>
@@ -200,13 +201,14 @@
                                 <th>Unit</th>
                                 <th>Price</th>
                                 <th>Qty</th>
+                                <th class="no-print">Available Stock</th>
                                 <th>Subtotal</th>
                                 <th class="no-print">Action</th>
                             </tr>
                         </thead>
                         <tbody id="bill-table-body">
                             <tr id="search-row" class="no-print">
-                                <td colspan="7" class="search-cell">
+                                <td colspan="8" class="search-cell">
                                     <input id="medicineSearch" class="form-control" placeholder="Search medicine by name or code and press Enter to add..." autofocus>
                                     <div id="search-results" class="search-results"></div>
                                 </td>
@@ -214,17 +216,17 @@
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="5" class="text-right">Subtotal</td>
+                                <td colspan="6" class="text-right">Subtotal</td>
                                 <td>₹<span id="subtotal">0.00</span></td>
                                 <td></td>
                             </tr>
                             <tr>
-                                <td colspan="5" class="text-right">Discount (%)</td>
+                                <td colspan="6" class="text-right">Discount (%)</td>
                                 <td class="no-print"><input type="number" id="discount" class="form-control" value="0"></td>
                                 <td class="no-print"></td>
                             </tr>
                             <tr class="grand-total-row">
-                                <td colspan="5" class="text-right font-weight-bold">Grand Total</td>
+                                <td colspan="6" class="text-right font-weight-bold">Grand Total</td>
                                 <td class="font-weight-bold">₹<span id="bill-total">0.00</span></td>
                                 <td class="no-print"></td>
                             </tr>
@@ -239,7 +241,7 @@
                         <input type="radio" name="payment-method" value="Cash" checked> Cash
                     </label>
                     <label class="payment-option-box">
-                        <input type="radio" name="payment-method" value="GPay"> GPay
+                        <input type="radio" name="payment-method" value="UPI"> UPI (GPay/PhonePe/Paytm)
                     </label>
                 </div>
                 <div class="button-group">
@@ -254,6 +256,42 @@
         <footer class="main-footer no-print">
             <p>&copy; 2025 Billing Software</p>
         </footer>
+    </div>
+
+    <!-- Quantity Selection Modal Overlay -->
+    <div class="modal-overlay" id="qtyModalOverlay">
+        <div class="qty-modal">
+            <h3 id="modalMedName">Medicine Name</h3>
+            <div id="modalMedCode" style="font-size: 0.85rem; color: var(--secondary-text); margin-bottom: 0.75rem;">Code: -</div>
+            
+            <div id="modalStockBanner" class="stock-display-banner ok">
+                <span>Available Stock:</span>
+                <span id="modalStockValue">0 packs</span>
+            </div>
+            
+            <div class="form-group">
+                <label for="modalUnitType">Unit Type</label>
+                <select class="form-control" id="modalUnitType">
+                    <option value="pack">Pack</option>
+                    <option value="loose">Loose</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="modalQty">Quantity</label>
+                <input type="number" class="form-control" id="modalQty" value="1" min="1" max="999">
+            </div>
+            
+            <div class="modal-subtotal-box">
+                <span style="font-weight: 600; color: var(--secondary-text);">Subtotal:</span>
+                <span class="val" id="modalSubtotal">₹0.00</span>
+            </div>
+            
+            <div class="btn-group">
+                <button type="button" class="btn btn-secondary" id="modalCancelBtn">Cancel</button>
+                <button type="button" class="btn btn-success" id="modalAddBtn">Add to Bill</button>
+            </div>
+        </div>
     </div>
 
     <script>

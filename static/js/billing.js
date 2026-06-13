@@ -4,7 +4,6 @@ const searchResults = document.getElementById('search-results');
 const billTableBody = document.querySelector('#bill-table-body');
 const subtotalSpan = document.getElementById('subtotal');
 const discountInput = document.getElementById('discount');
-// const taxInput = document.getElementById('tax'); // REMOVED: Tax element
 const billTotalSpan = document.getElementById('bill-total');
 const generateBillBtn = document.getElementById('generate-bill-btn');
 const printBillBtn = document.getElementById('print-bill-btn');
@@ -14,10 +13,33 @@ const customerNameInput = document.getElementById('customer-name');
 const doctorNameInput = document.getElementById('doctor-name');
 const customerPhoneInput = document.getElementById('customer-phone');
 const customerAddressInput = document.getElementById('customer-address');
+const customerHistoryInfo = document.getElementById('customer-history-info');
+
+// Modal elements
+const qtyModalOverlay = document.getElementById('qtyModalOverlay');
+const modalMedName = document.getElementById('modalMedName');
+const modalMedCode = document.getElementById('modalMedCode');
+const modalStockBanner = document.getElementById('modalStockBanner');
+const modalStockValue = document.getElementById('modalStockValue');
+const modalUnitType = document.getElementById('modalUnitType');
+const modalQty = document.getElementById('modalQty');
+const modalSubtotal = document.getElementById('modalSubtotal');
+const modalCancelBtn = document.getElementById('modalCancelBtn');
+const modalAddBtn = document.getElementById('modalAddBtn');
 
 // Store each line independently using a unique key
 let billItems = {};
 let isPrinting = false; // Flag to manage print process state
+let currentModalItem = null; // Store current item being configured in modal
+
+// Simple debounce helper
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+    };
+}
 
 // --- Session Storage Functions ---
 const STORAGE_KEY = 'currentBillItems';
@@ -97,16 +119,30 @@ async function performSearch() {
                 div.classList.add('search-result-item');
                 // Store the full item data in an attribute for quick access on click/Enter
                 div.setAttribute('data-item', JSON.stringify(item));
-                div.textContent = `${item.name} (${item.unit || '-'})`;
+                
+                const stockVal = Number(item.stock) || 0;
+                const packSize = Number(item.pack_size_ml) || 1;
+                const packsLeft = packSize > 0 ? (stockVal / packSize).toFixed(1) : 0;
+                
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                        <div>
+                            <strong style="color: var(--primary-text); font-weight: 600;">${item.name}</strong> 
+                            <span style="font-size: 0.82em; color: var(--secondary-text); margin-left: 8px;">Code: ${item.code || '-'}</span>
+                        </div>
+                        <div style="font-size: 0.88em; text-align: right;">
+                            <span style="margin-right: 15px;">Stock: <span style="font-weight: 600; color: ${stockVal <= 0 ? 'var(--danger-color)' : (packsLeft < 5 ? 'var(--secondary-color)' : 'var(--success-color)')}">${packsLeft} ${item.unit || 'packs'}</span></span>
+                            <span style="font-weight: 700; color: var(--info-hover);">₹${Number(item.mrp).toFixed(2)}</span>
+                        </div>
+                    </div>
+                `;
 
                 div.addEventListener('click', () => {
-                    // Use the stored data to add the item
                     const itemData = JSON.parse(div.getAttribute('data-item'));
-                    addItemToBill(itemData);
                     searchInput.value = '';
                     searchResults.innerHTML = '';
                     searchResults.style.display = 'none';
-                    searchInput.focus(); // Keep focus on the search box
+                    openQtyModal(itemData);
                 });
                 searchResults.appendChild(div);
             });
@@ -121,29 +157,24 @@ async function performSearch() {
 // Event listener for input (live search)
 searchInput.addEventListener('input', performSearch);
 
-// Event listener for Enter key (quick add)
+// Event listener for Enter key (quick add opens modal)
 searchInput.addEventListener('keydown', (e) => {
-    // Only run if the key pressed is Enter
     if (e.key === 'Enter') {
-        e.preventDefault(); // Stop default form submission or newline
+        e.preventDefault();
 
         const firstResult = searchResults.querySelector('.search-result-item');
 
         if (firstResult) {
             try {
-                // Grab data from the first visible result and add to bill
                 const itemData = JSON.parse(firstResult.getAttribute('data-item'));
-                addItemToBill(itemData);
-
-                // Clear input and hide results
                 searchInput.value = '';
                 searchResults.innerHTML = '';
                 searchResults.style.display = 'none';
+                openQtyModal(itemData);
             } catch (error) {
                 console.error("Error parsing item data:", error);
             }
         } else if (searchInput.value.trim().length > 1) {
-            // If Enter is pressed but no results are displayed, re-run search
             performSearch();
         }
     }
@@ -158,42 +189,37 @@ document.addEventListener('click', (event) => {
     }
 });
 
-function addItemToBill(item) {
-    const lineId = makeLineId();
-
-    // Check if already added
+function addItemToBill(item, quantity = 1, unitType = 'pack') {
+    // Check if already added with the exact same unitType
     const existingKey = Object.keys(billItems).find(
-        k => billItems[k].id === item.id && billItems[k].unitType === 'pack'
+        k => billItems[k].id === item.id && billItems[k].unitType === unitType
     );
 
     if (existingKey) {
-        billItems[existingKey].quantity++;
+        billItems[existingKey].quantity += quantity;
     } else {
-        // ✅ Strict priority for backend loose_mrp value
         let correctLooseMrp = 0;
         if (item.loose_mrp && Number(item.loose_mrp) > 0) {
             correctLooseMrp = Number(item.loose_mrp);
         } else if (item.loose_basic_price && Number(item.loose_basic_price) > 0) {
             correctLooseMrp = Number(item.loose_basic_price);
         } 
-        // 🛑 CRITICAL CHANGE: Removed the automatic division calculation here.
-        // The Loose MRP must come from stored data only.
-        // else if (item.mrp && item.pack_size_ml > 0) {
-        //     correctLooseMrp = Number(item.mrp) / Number(item.pack_size_ml);
-        // }
 
+        const lineId = makeLineId();
         billItems[lineId] = {
             lineId,
             id: item.id,
             name: item.name,
             unit: item.unit,
-            unitType: 'pack',
+            unitType: unitType,
             mrp: Number(item.mrp) || 0,
             loose_unit: item.loose_unit,
             loose_mrp: Number(correctLooseMrp.toFixed(2)) || 0,
             pack_size_ml: item.pack_size_ml,
             loose_size_ml: item.loose_size_ml,
-            quantity: 1,
+            stock: Number(item.stock) || 0,
+            code: item.code || '',
+            quantity: quantity,
             subtotal: 0
         };
     }
@@ -218,20 +244,17 @@ function updateItemLine(key, row) {
     const newType = unitSelect.value;
 
     // 1. Read and sanitize user input for price and quantity
-    // Allow reading price directly from input now that it's editable
     let newPrice = parseFloat(priceInput.value) || 0;
     const newQty = Math.max(1, parseInt(qtyInput.value) || 1);
 
-    // Ensure price is not negative and has two decimal places for display
     newPrice = Math.max(0, newPrice);
     priceInput.value = newPrice.toFixed(2);
     qtyInput.value = newQty;
 
-    // 2. Update the item object state (Crucial for persistence and backend)
+    // 2. Update the item object state
     item.unitType = newType;
     item.quantity = newQty;
 
-    // The price user inputs updates the corresponding mrp/loose_mrp property
     if (newType === 'loose') {
         item.loose_mrp = newPrice;
     } else {
@@ -244,6 +267,42 @@ function updateItemLine(key, row) {
 
     // 4. Update the DOM elements
     subtotalSpan.textContent = newSubtotal.toFixed(2);
+
+    // 5. Update stock available display text and warning badge inline
+    const stock = Number(item.stock) || 0;
+    const packSize = Number(item.pack_size_ml) || 1;
+    const looseSize = Number(item.loose_size_ml) || 1;
+    
+    let availableStockText = "";
+    let isLowOrOut = false;
+    
+    if (newType === 'loose') {
+        const looseQty = looseSize > 0 ? (stock / looseSize) : 0;
+        availableStockText = `${looseQty.toFixed(1)} ${item.loose_unit || 'units'}`;
+        isLowOrOut = newQty > looseQty;
+    } else {
+        const packQty = packSize > 0 ? (stock / packSize) : 0;
+        availableStockText = `${packQty.toFixed(1)} ${item.unit || 'packs'}`;
+        isLowOrOut = newQty > packQty;
+    }
+    
+    const stockValSpan = row.querySelector('.stock-value-span');
+    if (stockValSpan) {
+        stockValSpan.textContent = availableStockText;
+    }
+    
+    const stockCell = stockValSpan ? stockValSpan.parentElement : null;
+    if (stockCell) {
+        const badge = stockCell.querySelector('.stock-alert-badge');
+        if (badge) badge.remove();
+        
+        if (isLowOrOut) {
+            row.classList.add('over-stock-limit');
+            stockCell.insertAdjacentHTML('beforeend', ' <span class="stock-alert-badge">⚠ Exceeds</span>');
+        } else {
+            row.classList.remove('over-stock-limit');
+        }
+    }
 
     updateTotal();
     saveBillToSession();
@@ -265,23 +324,58 @@ function updateBillTable() {
         const subtotal = (Number(currentPrice) || 0) * item.quantity;
         item.subtotal = subtotal;
 
+        // Calculate available stock based on selected unit type
+        const stock = Number(item.stock) || 0;
+        const packSize = Number(item.pack_size_ml) || 1;
+        const looseSize = Number(item.loose_size_ml) || 1;
+        
+        let availableStockText = "";
+        let isLowOrOut = false;
+        
+        if (isLoose) {
+            const looseQty = looseSize > 0 ? (stock / looseSize) : 0;
+            availableStockText = `${looseQty.toFixed(1)} ${item.loose_unit || 'units'}`;
+            isLowOrOut = item.quantity > looseQty;
+        } else {
+            const packQty = packSize > 0 ? (stock / packSize) : 0;
+            availableStockText = `${packQty.toFixed(1)} ${item.unit || 'packs'}`;
+            isLowOrOut = item.quantity > packQty;
+        }
+
+        if (isLowOrOut) {
+            row.classList.add('over-stock-limit');
+        } else {
+            row.classList.remove('over-stock-limit');
+        }
+
+        const stockWarningSpan = isLowOrOut ? ' <span class="stock-alert-badge">⚠ Exceeds</span>' : '';
+
         row.innerHTML = `
             <td>${serialNo++}</td>
-            <td>${item.name}</td>
+            <td>
+                <span style="font-weight: 500;">${item.name}</span>
+                ${item.code ? `<div style="font-size: 0.8em; color: var(--secondary-text);">Code: ${item.code}</div>` : ''}
+            </td>
             <td>
                 <select class="unit-select">
                     <option value="pack" ${isLoose ? '' : 'selected'}>
                         Pack (${item.unit || '-'})
                     </option>
+                    ${item.loose_unit ? `
                     <option value="loose" ${isLoose ? 'selected' : ''}>
-                        Loose (${item.loose_unit || '-'})
+                        Loose (${item.loose_unit})
                     </option>
+                    ` : ''}
                 </select>
             </td>
             <td>
                 ₹<input type="number" class="price-input" value="${(Number(currentPrice) || 0).toFixed(2)}" min="0.01" step="0.01">
             </td>
             <td><input type="number" class="qty-input" value="${item.quantity}" min="1" max="999"></td>
+            <td class="no-print">
+                <span class="stock-value-span">${availableStockText}</span>
+                ${stockWarningSpan}
+            </td>
             <td>₹<span class="subtotal-span">${subtotal.toFixed(2)}</span></td>
             <td><button class="remove-btn btn-danger">Remove</button></td>
         `;
@@ -299,7 +393,7 @@ function updateBillTable() {
         priceInput.addEventListener('input', () => updateItemLine(key, row));
         priceInput.addEventListener('change', () => updateItemLine(key, row));
 
-        // ✅ Fixed: Always use backend prices on unit switch
+        // Always use backend prices on unit switch
         unitSelect.addEventListener('change', () => {
             const newType = unitSelect.value;
 
@@ -460,16 +554,158 @@ async function saveAndProcessBill(shouldPrint) {
 generateBillBtn.addEventListener('click', () => saveAndProcessBill(false));
 printBillBtn.addEventListener('click', () => saveAndProcessBill(true));
 
+// --- Quantity Modal Control Logic ---
+function openQtyModal(item) {
+    currentModalItem = item;
+    
+    modalMedName.textContent = item.name;
+    modalMedCode.textContent = item.code ? `Code: ${item.code}` : 'Code: -';
+    
+    // Configure Unit Type dropdown
+    modalUnitType.innerHTML = '';
+    const packOpt = document.createElement('option');
+    packOpt.value = 'pack';
+    packOpt.textContent = `Pack (${item.unit || '-'}) — ₹${(Number(item.mrp) || 0).toFixed(2)}`;
+    modalUnitType.appendChild(packOpt);
+    
+    if (item.loose_unit) {
+        const looseOpt = document.createElement('option');
+        looseOpt.value = 'loose';
+        looseOpt.textContent = `Loose (${item.loose_unit}) — ₹${(Number(item.loose_mrp) || 0).toFixed(2)}`;
+        modalUnitType.appendChild(looseOpt);
+    }
+    
+    modalUnitType.value = 'pack';
+    modalQty.value = 1;
+    
+    updateModalSubtotalAndStock();
+    
+    qtyModalOverlay.classList.add('active');
+    setTimeout(() => {
+        modalQty.focus();
+        modalQty.select();
+    }, 100);
+}
+
+function closeQtyModal() {
+    qtyModalOverlay.classList.remove('active');
+    currentModalItem = null;
+    searchInput.focus();
+}
+
+function updateModalSubtotalAndStock() {
+    if (!currentModalItem) return;
+    
+    const unitType = modalUnitType.value;
+    const qty = parseFloat(modalQty.value) || 0;
+    const price = unitType === 'loose' ? (Number(currentModalItem.loose_mrp) || 0) : (Number(currentModalItem.mrp) || 0);
+    const subtotal = qty * price;
+    
+    modalSubtotal.textContent = `₹${subtotal.toFixed(2)}`;
+    
+    // Update stock banner details
+    const stock = Number(currentModalItem.stock) || 0;
+    const packSize = Number(currentModalItem.pack_size_ml) || 1;
+    const looseSize = Number(currentModalItem.loose_size_ml) || 1;
+    
+    let displayStock = "";
+    let isLow = false;
+    let isOut = stock <= 0;
+    
+    if (unitType === 'pack') {
+        const packs = packSize > 0 ? (stock / packSize) : 0;
+        displayStock = `${packs.toFixed(1)} ${currentModalItem.unit || 'packs'}`;
+        isLow = packs <= 5;
+    } else {
+        const units = looseSize > 0 ? (stock / looseSize) : 0;
+        displayStock = `${units.toFixed(1)} ${currentModalItem.loose_unit || 'units'}`;
+        isLow = units <= 50;
+    }
+    
+    modalStockValue.textContent = displayStock;
+    
+    modalStockBanner.className = 'stock-display-banner';
+    if (isOut) {
+        modalStockBanner.classList.add('out');
+        modalStockValue.textContent = `${displayStock} (Out of Stock)`;
+    } else if (isLow) {
+        modalStockBanner.classList.add('warn');
+        modalStockValue.textContent = `${displayStock} (Low Stock)`;
+    } else {
+        modalStockBanner.classList.add('ok');
+    }
+}
+
+function submitModalAdd() {
+    if (!currentModalItem) return;
+    
+    const qty = parseInt(modalQty.value) || 1;
+    const unitType = modalUnitType.value;
+    
+    addItemToBill(currentModalItem, qty, unitType);
+    closeQtyModal();
+}
+
+// Modal event bindings
+modalUnitType.addEventListener('change', updateModalSubtotalAndStock);
+modalQty.addEventListener('input', updateModalSubtotalAndStock);
+
+modalQty.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        submitModalAdd();
+    } else if (e.key === 'Escape') {
+        closeQtyModal();
+    }
+});
+
+modalUnitType.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeQtyModal();
+    }
+});
+
+modalCancelBtn.addEventListener('click', closeQtyModal);
+modalAddBtn.addEventListener('click', submitModalAdd);
+
+qtyModalOverlay.addEventListener('click', (e) => {
+    if (e.target === qtyModalOverlay) {
+        closeQtyModal();
+    }
+});
+
+// --- Customer History Lookup by Phone ---
+const fetchCustomerHistory = async () => {
+    const phone = customerPhoneInput.value.trim();
+    if (phone.length >= 10) {
+        try {
+            const response = await fetch(`/get_customer_history?phone=${encodeURIComponent(phone)}`);
+            const data = await response.json();
+            if (data.found) {
+                customerHistoryInfo.innerHTML = `<strong>Last Visit:</strong> ${data.date} &nbsp;|&nbsp; <strong>Last Bill:</strong> ₹${data.total.toFixed(2)}`;
+                customerHistoryInfo.style.display = 'inline-block';
+            } else {
+                customerHistoryInfo.style.display = 'none';
+            }
+        } catch (e) {
+            console.error("Error fetching customer history:", e);
+            customerHistoryInfo.style.display = 'none';
+        }
+    } else {
+        customerHistoryInfo.style.display = 'none';
+    }
+};
+
+customerPhoneInput.addEventListener('input', debounce(fetchCustomerHistory, 300));
+customerPhoneInput.addEventListener('change', fetchCustomerHistory);
+
 // --- Global Event Listeners for Persistence ---
 
-// 2. Save bill just before the user leaves the page
 window.addEventListener('beforeunload', (e) => {
-    // If we're printing, return and do nothing. The session data must remain intact.
     if (isPrinting) {
         return;
     }
 
-    // Save state if items exist, otherwise clear session.
     if (Object.keys(billItems).length > 0) {
         saveBillToSession();
     } else {
@@ -477,19 +713,28 @@ window.addEventListener('beforeunload', (e) => {
     }
 });
 
-// 3. Clear session upon returning to the window after a print job is done or cancelled.
 window.addEventListener('focus', () => {
     if (isPrinting) {
-        // This runs when the browser window regains focus after the print dialog is closed (Print or Cancel).
         isPrinting = false;
-        // Clear the data and reload the page to get a fresh bill number and reset the screen.
         clearBillSession();
         window.location.reload();
     }
 });
 
+// Dynamic footer colspan adjustments for print vs screen layout
+window.addEventListener('beforeprint', () => {
+    document.querySelectorAll('#bill-table tfoot td[colspan="6"]').forEach(td => {
+        td.setAttribute('colspan', '5');
+    });
+});
+
+window.addEventListener('afterprint', () => {
+    document.querySelectorAll('#bill-table tfoot td[colspan="5"]').forEach(td => {
+        td.setAttribute('colspan', '6');
+    });
+});
+
 document.addEventListener('DOMContentLoaded', () => {
-    // Only load if we are not editing a bill
     if (Object.keys(billItems).length === 0) {
         loadBillFromSession();
     }
