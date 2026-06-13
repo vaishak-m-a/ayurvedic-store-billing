@@ -468,11 +468,58 @@ discountInput.addEventListener('input', () => {
 
 resetBillBtn.addEventListener('click', resetBillUI);
 
+// Check for stock validation issues before saving the bill
+function hasStockErrors() {
+    let hasError = false;
+    let errorMsg = "";
+    
+    for (const key of Object.keys(billItems)) {
+        const item = billItems[key];
+        
+        // Skip check if stock details are missing (e.g. loaded draft edit items)
+        if (item.stock === undefined || item.stock === null) {
+            continue;
+        }
+        
+        const stock = Number(item.stock) || 0;
+        const packSize = Number(item.pack_size_ml) || 1;
+        const looseSize = Number(item.loose_size_ml) || 1;
+        const qty = Number(item.quantity) || 0;
+        
+        if (item.unitType === 'loose') {
+            const looseQty = looseSize > 0 ? (stock / looseSize) : 0;
+            if (qty > looseQty) {
+                hasError = true;
+                errorMsg = `Cannot save bill. "${item.name}" exceeds available loose stock (Available: ${looseQty.toFixed(1)} ${item.loose_unit || 'units'}).`;
+                break;
+            }
+        } else {
+            const packQty = packSize > 0 ? (stock / packSize) : 0;
+            if (qty > packQty) {
+                hasError = true;
+                errorMsg = `Cannot save bill. "${item.name}" exceeds available stock (Available: ${packQty.toFixed(1)} ${item.unit || 'packs'}).`;
+                break;
+            }
+        }
+    }
+    
+    return { hasError, errorMsg };
+}
+
 async function saveAndProcessBill(shouldPrint) {
     if (Object.keys(billItems).length === 0) {
         statusMessage.textContent = "Please add items to the bill.";
         statusMessage.style.color = "red";
         setTimeout(() => (statusMessage.textContent = ''), 3000);
+        return;
+    }
+
+    // Block saving if any items are out of stock or exceed stock limit
+    const stockCheck = hasStockErrors();
+    if (stockCheck.hasError) {
+        statusMessage.textContent = stockCheck.errorMsg;
+        statusMessage.style.color = "red";
+        setTimeout(() => (statusMessage.textContent = ''), 5000);
         return;
     }
 

@@ -1019,7 +1019,7 @@ def generate_bill_logic(data):
             unit_type = item['unit_type']
             unit_price = item['unit_price']
 
-            med_row = cur.execute("SELECT name, unit, loose_unit, pack_size_ml, loose_size_ml FROM medicines WHERE id = ?", (med_id,)).fetchone()
+            med_row = cur.execute("SELECT name, unit, loose_unit, pack_size_ml, loose_size_ml, stock FROM medicines WHERE id = ?", (med_id,)).fetchone()
             if not med_row:
                 cur.execute("ROLLBACK")
                 return jsonify({'message': f"Medicine ID {med_id} not found."}), 404
@@ -1034,6 +1034,18 @@ def generate_bill_logic(data):
             elif unit_type == 'loose':
                 stock_deduction = float(med_row['loose_size_ml'] or 0) * qty
                 unit_display = med_row['loose_unit']
+            
+            # Check if deduction exceeds available stock
+            current_stock = float(med_row['stock'] or 0)
+            if current_stock < stock_deduction:
+                cur.execute("ROLLBACK")
+                if unit_type == 'pack':
+                    avail = current_stock / (float(med_row['pack_size_ml']) or 1)
+                    unit_name = med_row['unit'] or 'packs'
+                else:
+                    avail = current_stock / (float(med_row['loose_size_ml']) or 1)
+                    unit_name = med_row['loose_unit'] or 'units'
+                return jsonify({'message': f"Insufficient stock for '{med_row['name']}'. Available: {avail:.1f} {unit_name}."}), 400
             
             # 3. Update stock (Deduction)
             cur.execute("UPDATE medicines SET stock = stock - ? WHERE id = ?", (stock_deduction, med_id))
