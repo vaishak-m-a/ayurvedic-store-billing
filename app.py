@@ -1163,7 +1163,18 @@ def add_date_stock():
                 return jsonify({'message': 'Item not found.'}), 404
 
             pack_units_ml = float(item['pack_size_ml'] or 0)
-            units_added = packs_added * pack_units_ml
+            
+            # Parse custom stock decimal format (e.g. 6.15 means 6 bottles + 150ml)
+            val_str = str(data.get('packs', '0')).strip()
+            if '.' in val_str:
+                parts = val_str.split('.')
+                integer_part = int(parts[0])
+                decimal_part_str = parts[1]
+                extra_ml = 0 if decimal_part_str == '0' else int(decimal_part_str.ljust(3, '0')[:3])
+                sign = -1 if (integer_part < 0 or val_str.startswith('-')) else 1
+                units_added = sign * ((abs(integer_part) * pack_units_ml) + extra_ml)
+            else:
+                units_added = packs_added * pack_units_ml
 
             # 1. Update the overall stock count
             update_fields = ["stock = stock + ?"]
@@ -1352,7 +1363,16 @@ def update_stock():
         pack_units_ml = float(item['pack_size_ml'] or 0)
         
         if pack_units_ml > 0:
-            added_units = add_packs * pack_units_ml
+            val_str = str(data.get('packs', '0')).strip()
+            if '.' in val_str:
+                parts = val_str.split('.')
+                integer_part = int(parts[0])
+                decimal_part_str = parts[1]
+                extra_ml = 0 if decimal_part_str == '0' else int(decimal_part_str.ljust(3, '0')[:3])
+                sign = -1 if (integer_part < 0 or val_str.startswith('-')) else 1
+                added_units = sign * ((abs(integer_part) * pack_units_ml) + extra_ml)
+            else:
+                added_units = add_packs * pack_units_ml
         
         current_stock = float(item['stock'] or 0)
         new_stock = current_stock + added_units
