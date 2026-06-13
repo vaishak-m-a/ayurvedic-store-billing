@@ -911,6 +911,8 @@ def search_medicine():
     if not terms:
         rows = []
     else:
+        is_postgres = bool(os.environ.get('DATABASE_URL'))
+        like_op = 'ILIKE' if is_postgres else 'LIKE'
         sql = """
             SELECT id, name, unit, mrp, loose_unit, loose_mrp, loose_basic_price, 
                    pack_size_ml, loose_size_ml, stock, code, category
@@ -920,7 +922,7 @@ def search_medicine():
         conditions = []
         params = []
         for term in terms:
-            conditions.append("(name LIKE ? OR code LIKE ? OR category LIKE ?)")
+            conditions.append(f"(name {like_op} ? OR code {like_op} ? OR category {like_op} ?)")
             term_pattern = f"%{term}%"
             params.extend([term_pattern, term_pattern, term_pattern])
         sql += " AND ".join(conditions)
@@ -1386,10 +1388,12 @@ def search_stock():
     limit = int(request.args.get('limit', 50))
     conn = get_db_connection()
     # Fetch pack_unit for display in the table
-    rows = conn.execute("""
+    is_postgres = bool(os.environ.get('DATABASE_URL'))
+    like_op = 'ILIKE' if is_postgres else 'LIKE'
+    rows = conn.execute(f"""
         SELECT id, category, name, pack_size_ml, loose_size_ml, stock, mrp, code, loose_mrp, unit
         FROM medicines
-        WHERE name LIKE ? OR code LIKE ?
+        WHERE name {like_op} ? OR code {like_op} ?
         ORDER BY name
         LIMIT ?
     """, (f'%{q}%', f'%{q}%', limit)).fetchall()
