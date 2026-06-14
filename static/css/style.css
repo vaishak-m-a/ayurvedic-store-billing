@@ -735,3 +735,113 @@ span.stock-alert-badge {
 .search-result-item:hover {
     background-color: rgba(15, 23, 42, 0.03);
 }
+
+/* Bill table price & quantity inputs styling */
+.price-input-container {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background-color: #fff;
+    overflow: hidden;
+    transition: var(--transition-base);
+    box-sizing: border-box;
+}
+
+.price-input-container:focus-within {
+    border-color: var(--info-color);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+}
+
+#bill-table .price-input,
+#bill-table .qty-input {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.95rem;
+    font-family: inherit;
+    color: var(--primary-text);
+    transition: var(--transition-base);
+    background-color: #fff;
+    text-align: right;
+    box-sizing: border-box;
+}
+
+#bill-table .price-input {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    width: 65px;
+    margin: 0;
+}
+
+#bill-table .qty-input {
+    width: 85px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+}
+
+#bill-table .qty-input:focus {
+    outline: none;
+    border-color: var(--info-color);
+    box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+}
+
+.price-spin-buttons {
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid #cbd5e1;
+    width: 22px;
+    background: #f8fafc;
+}
+
+.price-spin-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 50%;
+    border: none;
+    background: transparent;
+    color: var(--secondary-text);
+    font-size: 0.55rem;
+    cursor: pointer;
+    padding: 0;
+    transition: var(--transition-base);
+}
+
+.price-spin-btn:hover {
+    background-color: #cbd5e1;
+    color: var(--primary-text);
+}
+
+.price-spin-btn:active {
+    background-color: #94a3b8;
+}
+
+.price-spin-buttons button:first-child {
+    border-bottom: 1px solid #cbd5e1;
+}
+
+/* Hide number input spinners for a cleaner, simpler look */
+#bill-table input[type="number"]::-webkit-outer-spin-button,
+#bill-table input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+#bill-table input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+/* Printing styles for input containers */
+@media print {
+    .price-spin-buttons {
+        display: none !important;
+    }
+    .price-input-container {
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+    }
+    .price-input-container .price-input {
+        text-align: right;
+        padding-right: 0 !important;
+    }
+}

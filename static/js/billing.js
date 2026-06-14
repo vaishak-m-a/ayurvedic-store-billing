@@ -234,7 +234,7 @@ function addItemToBill(item, quantity = 1, unitType = 'pack') {
  * @param {string} key - The unique key of the item in billItems.
  * @param {HTMLTableRowElement} row - The DOM element for the row.
  */
-function updateItemLine(key, row) {
+function updateItemLine(key, row, formatInputs = false) {
     const item = billItems[key];
     const unitSelect = row.querySelector('.unit-select');
     const qtyInput = row.querySelector('.qty-input');
@@ -243,17 +243,26 @@ function updateItemLine(key, row) {
 
     const newType = unitSelect.value;
 
-    // 1. Read and sanitize user input for price and quantity
-    let newPrice = parseFloat(priceInput.value) || 0;
-    const newQty = Math.max(1, parseInt(qtyInput.value) || 1);
+    // 1. Read user input for price and quantity
+    let newPrice = parseFloat(priceInput.value);
+    if (isNaN(newPrice)) newPrice = 0;
+    
+    let newQty = parseInt(qtyInput.value);
+    if (isNaN(newQty)) newQty = 0;
 
     newPrice = Math.max(0, newPrice);
-    priceInput.value = newPrice.toFixed(2);
-    qtyInput.value = newQty;
+
+    if (formatInputs) {
+        newQty = Math.max(1, newQty);
+        priceInput.value = newPrice.toFixed(2);
+        qtyInput.value = newQty;
+    } else {
+        newQty = Math.max(0, newQty);
+    }
 
     // 2. Update the item object state
     item.unitType = newType;
-    item.quantity = newQty;
+    item.quantity = Math.max(1, newQty);
 
     if (newType === 'loose') {
         item.loose_mrp = newPrice;
@@ -369,7 +378,13 @@ function updateBillTable() {
                 </select>
             </td>
             <td>
-                ₹<input type="number" class="price-input" value="${(Number(currentPrice) || 0).toFixed(2)}" min="0.01" step="0.01">
+                <div class="price-input-container">
+                    <input type="number" class="price-input" value="${(Number(currentPrice) || 0).toFixed(2)}" min="0.00" step="0.01">
+                    <div class="price-spin-buttons no-print">
+                        <button type="button" class="price-spin-btn inc-price" tabindex="-1">▲</button>
+                        <button type="button" class="price-spin-btn dec-price" tabindex="-1">▼</button>
+                    </div>
+                </div>
             </td>
             <td><input type="number" class="qty-input" value="${item.quantity}" min="1" max="999"></td>
             <td class="no-print">
@@ -384,14 +399,39 @@ function updateBillTable() {
         const qtyInput = row.querySelector('.qty-input');
         const priceInput = row.querySelector('.price-input');
         const removeBtn = row.querySelector('.remove-btn');
+        const incBtn = row.querySelector('.inc-price');
+        const decBtn = row.querySelector('.dec-price');
 
         // Quantity listeners
-        qtyInput.addEventListener('input', () => updateItemLine(key, row));
-        qtyInput.addEventListener('change', () => updateItemLine(key, row));
+        qtyInput.addEventListener('input', () => updateItemLine(key, row, false));
+        qtyInput.addEventListener('change', () => updateItemLine(key, row, true));
+        qtyInput.addEventListener('blur', () => updateItemLine(key, row, true));
+        qtyInput.addEventListener('focus', () => qtyInput.select());
 
         // Price listeners (manual edits)
-        priceInput.addEventListener('input', () => updateItemLine(key, row));
-        priceInput.addEventListener('change', () => updateItemLine(key, row));
+        priceInput.addEventListener('input', () => updateItemLine(key, row, false));
+        priceInput.addEventListener('change', () => updateItemLine(key, row, true));
+        priceInput.addEventListener('blur', () => updateItemLine(key, row, true));
+        priceInput.addEventListener('focus', () => priceInput.select());
+
+        // Custom spin buttons listeners for price
+        if (incBtn) {
+            incBtn.addEventListener('click', () => {
+                const currentVal = parseFloat(priceInput.value) || 0;
+                const step = unitSelect.value === 'loose' ? 0.01 : 1.00;
+                priceInput.value = (currentVal + step).toFixed(2);
+                updateItemLine(key, row, true);
+            });
+        }
+
+        if (decBtn) {
+            decBtn.addEventListener('click', () => {
+                const currentVal = parseFloat(priceInput.value) || 0;
+                const step = unitSelect.value === 'loose' ? 0.01 : 1.00;
+                priceInput.value = Math.max(0, currentVal - step).toFixed(2);
+                updateItemLine(key, row, true);
+            });
+        }
 
         // Always use backend prices on unit switch
         unitSelect.addEventListener('change', () => {
@@ -403,7 +443,7 @@ function updateBillTable() {
 
             priceInput.value = newDefaultPrice.toFixed(2);
             item.unitType = newType; // keep current selection
-            updateItemLine(key, row);
+            updateItemLine(key, row, true);
         });
 
         removeBtn.addEventListener('click', () => {
